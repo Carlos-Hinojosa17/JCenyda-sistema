@@ -264,6 +264,84 @@ router.put('/:id', protect, async (req, res) => {
     }
 });
 
+// Reemplazar detalle de una cotización y actualizar totales
+router.put('/:id/detalle', protect, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { items, total, total_items, total_con_comision } = req.body;
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ success: false, message: 'Los items de la cotización son requeridos' });
+        }
+
+        // Verificar que la cotización exista
+        const { data: cotizacion, error: errorCot } = await supabase
+            .from('cotizaciones')
+            .select('id')
+            .eq('id', id)
+            .single();
+
+        if (errorCot || !cotizacion) {
+            return res.status(404).json({ success: false, message: 'Cotización no encontrada' });
+        }
+
+        // Eliminar detalle existente
+        const { error: errorDelete } = await supabase
+            .from('cotizaciones_detalle')
+            .delete()
+            .eq('cotizacion_id', id);
+
+        if (errorDelete) {
+            console.error('❌ Error al eliminar detalle anterior:', errorDelete);
+            return res.status(500).json({ success: false, message: 'Error al reemplazar detalle de cotización' });
+        }
+
+        // Insertar nuevo detalle
+        const itemsParaInsertar = items.map(item => ({
+            cotizacion_id: id,
+            producto_id: item.producto_id,
+            producto_nombre: item.producto_nombre,
+            cantidad: item.cantidad,
+            precio_unitario: item.precio_unitario,
+            subtotal: item.subtotal
+        }));
+
+        const { error: errorInsert } = await supabase
+            .from('cotizaciones_detalle')
+            .insert(itemsParaInsertar);
+
+        if (errorInsert) {
+            console.error('❌ Error al insertar nuevo detalle:', errorInsert);
+            return res.status(500).json({ success: false, message: 'Error al insertar nuevo detalle de cotización' });
+        }
+
+        // Actualizar totales en la cotización si vienen
+        const updatePayload = {};
+        if (total !== undefined) updatePayload.total = total;
+        if (total_items !== undefined) updatePayload.total_items = total_items;
+        if (total_con_comision !== undefined) updatePayload.total_con_comision = total_con_comision;
+        updatePayload.fecha_actualizacion = new Date().toISOString();
+
+        if (Object.keys(updatePayload).length > 0) {
+            const { error: errorUpdate } = await supabase
+                .from('cotizaciones')
+                .update(updatePayload)
+                .eq('id', id);
+
+            if (errorUpdate) {
+                console.error('❌ Error al actualizar totales de cotización:', errorUpdate);
+                return res.status(500).json({ success: false, message: 'Error al actualizar totales de cotización' });
+            }
+        }
+
+        res.json({ success: true, message: 'Detalle de cotización actualizado correctamente' });
+
+    } catch (error) {
+        console.error('❌ Error inesperado al reemplazar detalle de cotización:', error);
+        res.status(500).json({ success: false, message: 'Error interno del servidor', error: error.message });
+    }
+});
+
 // Eliminar cotización
 router.delete('/:id', protect, async (req, res) => {
     try {

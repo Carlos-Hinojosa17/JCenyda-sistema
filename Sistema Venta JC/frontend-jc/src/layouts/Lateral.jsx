@@ -56,6 +56,11 @@ export default function Lateral() {
                             <i className='bi bi-file-text me-2'></i>Cotizaciones
                         </Link>
                     )}
+                    {allowedPages.reportes && (
+                        <Link to='/layouts/reportes' className='nav-link text-white'>
+                            <i className='bi bi-bar-chart-line me-2'></i>Reportes
+                        </Link>
+                    )}
                     {allowedPages.usuarios && (
                         <Link to='/layouts/usuarios' className='nav-link text-white'>
                             <i className='bi bi-person-plus me-2'></i>Usuarios

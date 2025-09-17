@@ -53,6 +53,9 @@ export default function Login() {
         verifyConnection();
     }, []);
 
+    // Nota: la lógica para listar clientes fue removida temporalmente para evitar
+    // errores en desarrollo (se usará una prueba de conexión independiente).
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -145,9 +148,8 @@ export default function Login() {
                             <br/>
                             <strong>Vendedor:</strong><br/>
                             • vendedor / vendedor123<br/>
-                            <br/>
-                            <em>✅ Conectado a base de datos Supabase</em>
                         </div>
+                        {/* Información adicional removida temporalmente para evitar errores en desarrollo */}
                     </div>
                     
                     <form onSubmit={handleSubmit}>

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { productService, salesService, clientService, quotationService } from '../services/apiServices';
+import { productService, salesService, clientService, quotationService, authService } from '../services/apiServices';
 
 // Componente de error boundary para capturar errores
 class ErrorBoundary extends React.Component {
@@ -597,8 +597,11 @@ function VentaContent() {
                 (esAdelanto ? montoAdelanto + comisionTarjeta : total + comisionTarjeta) : 
                 (esAdelanto ? montoAdelanto : total);
 
+            const currentUser = authService.getCurrentUser();
+
             const saleData = {
-                cliente_id: clienteSeleccionado?.id || null,
+                cliente_id: clienteSeleccionado?.id ?? null,
+                usuarios_id: currentUser?.id ?? null,
                 metodo_pago: metodoPago,
                 tipo_precio: tipoPrecio,
                 // Información de pago detallada
@@ -607,6 +610,7 @@ function VentaContent() {
                 comision_tarjeta: metodoPago === 'tarjeta' ? comisionTarjeta : 0,
                 // Información de adelanto
                 es_adelanto: esAdelanto,
+                adelanto: esAdelanto ? montoAdelanto : 0,
                 monto_adelanto: esAdelanto ? montoAdelanto : null,
                 saldo_pendiente: esAdelanto ? saldoPendiente : null,
                 // Información de envío

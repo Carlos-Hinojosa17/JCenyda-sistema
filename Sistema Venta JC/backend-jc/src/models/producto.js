@@ -14,6 +14,22 @@ const getAllProductos = async () => {
   return data;
 };
 
+const searchProductos = async (q) => {
+  if (!q || q.trim() === '') return getAllProductos();
+  const term = `%${q.trim()}%`;
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .select('*')
+    .or(`descripcion.ilike.${term},codigo.ilike.${term}`)
+    .order('descripcion', { ascending: true })
+    .limit(50);
+
+  if (error) {
+    throw new Error('Error al buscar productos');
+  }
+  return data;
+};
+
 const getProductoById = async (id) => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
@@ -163,6 +179,7 @@ module.exports = {
   getAllProductos,
   getProductoById,
   getProductoByCodigo,
+  searchProductos,
   createProducto,
   updateProducto,
   deleteProducto,

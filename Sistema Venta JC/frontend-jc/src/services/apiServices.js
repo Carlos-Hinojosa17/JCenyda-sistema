@@ -170,6 +170,16 @@ export const productService = {
     }
   },
 
+  // Buscar productos por texto (nombre o código)
+  search: async (q) => {
+    try {
+      const response = await api.get('/products', { params: { q } });
+      return response.data.success ? response.data.data : [];
+    } catch (error) {
+      throw error.response?.data || { message: 'Error al buscar productos' };
+    }
+  },
+
   // Obtener producto por ID
   getById: async (id) => {
     try {
@@ -295,6 +305,60 @@ export const salesService = {
       throw error.response?.data || { message: 'Error al obtener reporte' };
     }
   }
+  ,
+
+  // Obtener venta por ID
+  getById: async (id) => {
+    try {
+      const response = await api.get(`/ventas/${id}`);
+      return response.data.success ? response.data.data : null;
+    } catch (error) {
+      throw error.response?.data || { message: 'Error al obtener venta' };
+    }
+  }
+  ,
+
+  // Anular venta (requiere credenciales admin)
+  anularVenta: async (id, credentials) => {
+    try {
+      const response = await api.post(`/ventas/${id}/anular`, credentials);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Error al anular venta' };
+    }
+  }
+  ,
+  marcarPagada: async (id, payload = {}) => {
+    try {
+      // payload recibido como segundo argumento
+      const response = await api.post(`/ventas/${id}/marcar-pagada`, payload);
+      // Si el backend responde con success:false, lanzar error para que el catch lo maneje
+      if (response.data && response.data.success === false) {
+        const msg = response.data.message || 'Error al marcar como pagada';
+        throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+      }
+      return response.data;
+    } catch (error) {
+      // Log detallado para depuración en consola del navegador
+      console.error('salesService.marcarPagada - error raw:', error, 'responseData:', error?.response?.data);
+      const msg = error?.response?.data?.message || error?.message || 'Error al marcar como pagada';
+      throw new Error(typeof msg === 'string' && msg.trim() !== '' ? msg : 'Error al marcar como pagada');
+    }
+  }
+};
+
+// Servicio para detalles de venta (si el endpoint existe separadamente)
+export const detailService = {
+  getByVentaId: async (ventaId) => {
+    try {
+      const response = await api.get(`/detalle-venta/${ventaId}`);
+      return response.data.success ? response.data.data : [];
+    } catch (error) {
+      // No forzar excepción, devolver array vacío para fallback
+      console.error('Error al obtener detalles por venta:', error.response?.data || error.message);
+      return [];
+    }
+  }
 };
 
 // Servicio de cotizaciones
@@ -376,6 +440,17 @@ export const quotationService = {
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Error al convertir cotización a venta' };
+    }
+  }
+  ,
+
+  // Actualizar detalle de cotización (reemplaza items y actualiza totales)
+  updateDetalle: async (id, payload) => {
+    try {
+      const response = await api.put(`/cotizaciones/${id}/detalle`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Error al actualizar detalle de cotización' };
     }
   }
 };

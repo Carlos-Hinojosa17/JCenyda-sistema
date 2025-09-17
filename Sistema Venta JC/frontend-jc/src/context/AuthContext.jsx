@@ -72,6 +72,7 @@ export const AuthProvider = ({ children }) => {
                 clientes: true,
                 almacen: true,
                 cotizaciones: true,
+                reportes: true,
                 usuarios: true
             };
         } else if (isVendedor()) {
@@ -82,6 +83,7 @@ export const AuthProvider = ({ children }) => {
                 clientes: false,
                 almacen: true,
                 cotizaciones: true,
+                reportes: false,
                 usuarios: false
             };
         }

@@ -13,6 +13,7 @@ import Clientes from "./paginas/Clientes";
 import Almacen from "./paginas/Almacen";
 import Venta from "./paginas/Venta";
 import Cotizaciones from "./paginas/Cotizaciones";
+import Reportes from "./paginas/Reportes";
 import RegistroUsuarios from "./paginas/RegistroUsuarios";
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
     <AuthProvider>
       <Router>
         <Routes>
+          <Route path="/login" element={<Login />} />
           <Route path="/" element={<Login />} />
           <Route path="/layouts" element={
             <ProtectedRoute>
@@ -54,6 +56,11 @@ function App() {
             <Route path="cotizaciones" element={
               <ProtectedRoute requireRole={["admin", "vendedor"]}>
                 <Cotizaciones />
+              </ProtectedRoute>
+            } />
+            <Route path="reportes" element={
+              <ProtectedRoute requireRole={["admin"]}>
+                <Reportes />
               </ProtectedRoute>
             } />
             <Route path="usuarios" element={

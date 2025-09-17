@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { quotationService } from '../services/apiServices';
+import { quotationService, productService } from '../services/apiServices';
 
 function Cotizaciones() {
     const navigate = useNavigate();
@@ -133,6 +133,153 @@ function Cotizaciones() {
             imprimirDocumento(cotizacion, cotizacionDetalle);
         } else {
             alert('Error: No se han cargado los detalles de la cotización');
+        }
+    };
+
+    // --- Editor inline: abrir modal con detalle editable ---
+    const [editingItems, setEditingItems] = useState([]);
+    const [editingTotals, setEditingTotals] = useState({ total: 0, total_items: 0, total_con_comision: 0 });
+    const [editingCotizacionId, setEditingCotizacionId] = useState(null);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
+    const [productSearchResults, setProductSearchResults] = useState({});
+    const [productSearchLoading, setProductSearchLoading] = useState({});
+
+    // Simple debounce helper
+    const debounce = (fn, delay = 300) => {
+        let timer;
+        return (...args) => {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn(...args), delay);
+        };
+    };
+
+    const searchProductForRow = debounce(async (query, rowIndex) => {
+        if (!query || query.trim().length < 1) {
+            setProductSearchResults(prev => ({ ...prev, [rowIndex]: [] }));
+            return;
+        }
+        try {
+            setProductSearchLoading(prev => ({ ...prev, [rowIndex]: true }));
+            const results = await productService.search(query);
+            setProductSearchResults(prev => ({ ...prev, [rowIndex]: results }));
+        } catch (error) {
+            console.error('Error buscando productos:', error);
+            setProductSearchResults(prev => ({ ...prev, [rowIndex]: [] }));
+        } finally {
+            setProductSearchLoading(prev => ({ ...prev, [rowIndex]: false }));
+        }
+    }, 300);
+
+    const selectProductForRow = (rowIndex, product) => {
+        const copy = [...editingItems];
+        copy[rowIndex] = {
+            ...copy[rowIndex],
+            producto_id: product.id,
+            producto_nombre: product.descripcion || product.nombre || '',
+            producto_codigo: product.codigo || product.producto_codigo || '',
+            precio_unitario: Number(product.pre_general || product.precio_unitario || 0),
+            cantidad: copy[rowIndex].cantidad || 1,
+        };
+        copy[rowIndex].subtotal = Number(copy[rowIndex].cantidad || 0) * Number(copy[rowIndex].precio_unitario || 0);
+        setEditingItems(copy);
+        recalcEditingTotals(copy);
+        // Limpiar resultados para ese row
+        setProductSearchResults(prev => ({ ...prev, [rowIndex]: [] }));
+    };
+
+    const openEditor = async (cotizacion) => {
+        try {
+            setSelectedCotizacion(cotizacion);
+            setEditingCotizacionId(cotizacion.id);
+            setLoadingDetalle(true);
+            const detalle = await quotationService.getDetalle(cotizacion.id);
+            // Mapear productos a estructura editable
+            const items = (detalle?.productos || []).map(p => ({
+                producto_id: p.producto_id,
+                producto_nombre: p.producto_nombre,
+                producto_codigo: p.producto_codigo,
+                cantidad: Number(p.cantidad) || 0,
+                precio_unitario: Number(p.precio_unitario) || 0,
+                subtotal: Number(p.subtotal) || 0,
+            }));
+            setEditingItems(items);
+            recalcEditingTotals(items, cotizacion);
+            // Mostrar modal de detalle editable mediante estado (no depender de window.bootstrap)
+            setShowEditor(true);
+        } catch (error) {
+            console.error('Error al abrir editor:', error);
+            alert('No se pudo cargar el detalle para edición');
+        } finally {
+            setLoadingDetalle(false);
+        }
+    };
+
+    const recalcEditingTotals = (items, cotizacion = selectedCotizacion) => {
+        const total_items = items.reduce((s, it) => s + (Number(it.cantidad) || 0), 0);
+        const total = items.reduce((s, it) => s + ((Number(it.cantidad) || 0) * (Number(it.precio_unitario) || 0)), 0);
+        const comision = parseFloat(cotizacion?.comision_tarjeta || 0) || 0;
+        const total_con_comision = total + comision;
+        setEditingTotals({ total, total_items, total_con_comision });
+    };
+
+    const updateEditingItem = (index, field, value) => {
+        const newItems = [...editingItems];
+        if (field === 'cantidad') newItems[index].cantidad = Number(value);
+        if (field === 'precio_unitario') newItems[index].precio_unitario = Number(value);
+        newItems[index].subtotal = Number(newItems[index].cantidad || 0) * Number(newItems[index].precio_unitario || 0);
+        setEditingItems(newItems);
+        recalcEditingTotals(newItems);
+    };
+
+    const addEditingRow = () => {
+        setEditingItems(prev => ([...prev, { producto_id: null, producto_nombre: '', producto_codigo: '', cantidad: 1, precio_unitario: 0, subtotal: 0 }]));
+    };
+
+    const removeEditingRow = (index) => {
+        const newItems = [...editingItems];
+        newItems.splice(index, 1);
+        setEditingItems(newItems);
+        recalcEditingTotals(newItems);
+    };
+
+    const saveEditedDetalle = async () => {
+        if (!editingCotizacionId) return;
+        if (!window.confirm('¿Guardar cambios en la cotización?')) return;
+        try {
+            setSavingEdit(true);
+            // Construir payload esperado por el backend
+            const itemsPayload = editingItems.map(it => ({
+                producto_id: it.producto_id,
+                producto_nombre: it.producto_nombre,
+                producto_codigo: it.producto_codigo,
+                cantidad: Number(it.cantidad) || 0,
+                precio_unitario: Number(it.precio_unitario) || 0,
+                subtotal: Number(it.subtotal) || 0,
+            }));
+
+            const payload = {
+                items: itemsPayload,
+                total: editingTotals.total,
+                total_items: editingTotals.total_items,
+                total_con_comision: editingTotals.total_con_comision
+            };
+
+            const res = await quotationService.updateDetalle(editingCotizacionId, payload);
+            if (res && res.success) {
+                // Cerrar modal controlado por estado
+                setShowEditor(false);
+                // Recargar lista
+                await loadCotizaciones();
+                alert('Cotización actualizada correctamente');
+            } else {
+                throw new Error(res?.message || 'Error desconocido');
+            }
+        } catch (error) {
+            console.error('Error al guardar detalle:', error);
+            alert('Error al guardar los cambios de la cotización');
+        } finally {
+            setSavingEdit(false);
         }
     };
 
@@ -471,6 +618,13 @@ function Cotizaciones() {
                                                 <i className="bi bi-cart-check"></i>
                                             </button>
                                             <button
+                                                className="btn btn-sm btn-outline-primary"
+                                                onClick={() => openEditor(cotizacion)}
+                                                title="Editar cotización"
+                                            >
+                                                <i className="bi bi-pencil-square"></i>
+                                            </button>
+                                            <button
                                                 className="btn btn-sm btn-outline-info"
                                                 onClick={() => imprimirCotizacion(cotizacion)}
                                                 title="Imprimir cotización"
@@ -635,8 +789,8 @@ function Cotizaciones() {
                                 </button>
                                 <button 
                                     type="button" 
-                                    className="btn btn-success"
-                                    onClick={() => convertirAVenta(selectedCotizacion)}
+                                    className="btn btn-primary"
+                                    onClick={() => openEditor(selectedCotizacion)}
                                     disabled={convertingToSale}
                                 >
                                     {convertingToSale ? (
@@ -646,8 +800,8 @@ function Cotizaciones() {
                                         </>
                                     ) : (
                                         <>
-                                            <i className="bi bi-cart-check me-2"></i>
-                                            Ir a Venta
+                                            <i className="bi bi-pencil-square me-2"></i>
+                                            Modificar Cotización
                                         </>
                                     )}
                                 </button>
@@ -656,6 +810,199 @@ function Cotizaciones() {
                     </div>
                 </div>
             )}
+
+            {showEditor && (
+                <div className="modal show d-block" tabIndex="-1" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                    <div className="modal-dialog modal-xl modal-dialog-centered">
+                        <div className="modal-content">
+                            <div className="modal-header bg-primary text-white">
+                                <h5 className="modal-title">Editar Cotización {editingCotizacionId ? `COT-${editingCotizacionId}` : ''}</h5>
+                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowEditor(false)} aria-label="Close"></button>
+                            </div>
+                            <div className="modal-body">
+                                <div className="mb-3 d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>Cliente:</strong> {selectedCotizacion?.cliente_nombre || 'No especificado'}
+                                    </div>
+                                    <div>
+                                        <button className="btn btn-sm btn-outline-success me-2" onClick={addEditingRow}><i className="bi bi-plus"></i> Agregar fila</button>
+                                    </div>
+                                </div>
+
+                                <div className="table-responsive">
+                                    <table className="table table-sm">
+                                        <thead className="table-light">
+                                            <tr>
+                                                <th style={{minWidth: 300}}>Producto</th>
+                                                <th style={{width: 120}}>Cantidad</th>
+                                                <th style={{width: 160}}>Precio Unit.</th>
+                                                <th style={{width: 160}}>Subtotal</th>
+                                                <th style={{width: 80}}>Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {editingItems.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="5" className="text-center">No hay productos para editar</td>
+                                                </tr>
+                                            ) : (
+                                                editingItems.map((it, idx) => (
+                                                    <tr key={idx}>
+                                                        <td style={{position: 'relative'}}>
+                                                            <input type="text" className="form-control form-control-sm" value={it.producto_nombre || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_nombre = v; setEditingItems(copy); searchProductForRow(v, idx); }} placeholder="Buscar producto por nombre o código" />
+                                                            <input type="text" className="form-control form-control-sm mt-1" value={it.producto_codigo || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_codigo = v; setEditingItems(copy); }} placeholder="Código" />
+                                                            {/* Dropdown de resultados */}
+                                                            {productSearchLoading[idx] && (
+                                                                <div className="position-absolute bg-white border rounded p-2" style={{zIndex: 50, top: '68px', left: 0, right: 0}}>
+                                                                    <div className="small text-muted">Buscando...</div>
+                                                                </div>
+                                                            )}
+                                                            {productSearchResults[idx] && productSearchResults[idx].length > 0 && (
+                                                                <div className="position-absolute bg-white border rounded" style={{zIndex: 50, top: '68px', left: 0, right: 0, maxHeight: 240, overflowY: 'auto'}}>
+                                                                    {productSearchResults[idx].map(prod => (
+                                                                        <div key={prod.id} className="p-2 list-group-item list-group-item-action" style={{cursor: 'pointer'}} onClick={() => selectProductForRow(idx, prod)}>
+                                                                            <div><strong>{prod.descripcion}</strong> <small className="text-muted">{prod.codigo}</small></div>
+                                                                            <div className="small text-muted">S/ {Number(prod.pre_general || prod.precio_unitario || 0).toLocaleString()}</div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" min="0" className="form-control form-control-sm text-end" value={it.cantidad} onChange={(e) => updateEditingItem(idx, 'cantidad', e.target.value)} />
+                                                        </td>
+                                                        <td>
+                                                            <input type="number" min="0" step="0.01" className="form-control form-control-sm text-end" value={it.precio_unitario} onChange={(e) => updateEditingItem(idx, 'precio_unitario', e.target.value)} />
+                                                        </td>
+                                                        <td className="text-end">
+                                                            S/ {Number(it.subtotal || 0).toLocaleString()}
+                                                        </td>
+                                                        <td>
+                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => removeEditingRow(idx)}><i className="bi bi-trash"></i></button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr>
+                                                <th className="text-end">Totales:</th>
+                                                <th className="text-end">{editingTotals.total_items || 0}</th>
+                                                <th></th>
+                                                <th className="text-end">S/ {Number(editingTotals.total || 0).toLocaleString()}</th>
+                                                <th></th>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan="3" className="text-end">Total con comisión:</td>
+                                                <td className="text-end">S/ {Number(editingTotals.total_con_comision || 0).toLocaleString()}</td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+                            <div className="modal-footer">
+                                <button type="button" className="btn btn-secondary" onClick={() => setShowEditor(false)}>Cerrar</button>
+                                <button type="button" className="btn btn-primary" onClick={saveEditedDetalle} disabled={savingEdit}>
+                                    {savingEdit ? (
+                                        <><span className="spinner-border spinner-border-sm me-2"></span>Guardando...</>
+                                    ) : (
+                                        <>Guardar cambios</>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal editor inline para editar items de una cotización */}
+            <div className="modal fade" id="cotizacionEditorModal" tabIndex="-1" aria-hidden="true">
+                <div className="modal-dialog modal-xl modal-dialog-centered">
+                    <div className="modal-content">
+                        <div className="modal-header bg-primary text-white">
+                            <h5 className="modal-title">Editar Cotización {editingCotizacionId ? `COT-${editingCotizacionId}` : ''}</h5>
+                            <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div className="modal-body">
+                            <div className="mb-3 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>Cliente:</strong> {selectedCotizacion?.cliente_nombre || 'No especificado'}
+                                </div>
+                                <div>
+                                    <button className="btn btn-sm btn-outline-success me-2" onClick={addEditingRow}><i className="bi bi-plus"></i> Agregar fila</button>
+                                </div>
+                            </div>
+
+                            <div className="table-responsive">
+                                <table className="table table-sm">
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th style={{minWidth: 300}}>Producto</th>
+                                            <th style={{width: 120}}>Cantidad</th>
+                                            <th style={{width: 160}}>Precio Unit.</th>
+                                            <th style={{width: 160}}>Subtotal</th>
+                                            <th style={{width: 80}}>Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {editingItems.length === 0 ? (
+                                            <tr>
+                                                <td colSpan="5" className="text-center">No hay productos para editar</td>
+                                            </tr>
+                                        ) : (
+                                            editingItems.map((it, idx) => (
+                                                <tr key={idx}>
+                                                    <td>
+                                                        <input type="text" className="form-control form-control-sm" value={it.producto_nombre || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_nombre = v; setEditingItems(copy); }} placeholder="Nombre del producto" />
+                                                        <input type="text" className="form-control form-control-sm mt-1" value={it.producto_codigo || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_codigo = v; setEditingItems(copy); }} placeholder="Código" />
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" min="0" className="form-control form-control-sm text-end" value={it.cantidad} onChange={(e) => updateEditingItem(idx, 'cantidad', e.target.value)} />
+                                                    </td>
+                                                    <td>
+                                                        <input type="number" min="0" step="0.01" className="form-control form-control-sm text-end" value={it.precio_unitario} onChange={(e) => updateEditingItem(idx, 'precio_unitario', e.target.value)} />
+                                                    </td>
+                                                    <td className="text-end">
+                                                        S/ {Number(it.subtotal || 0).toLocaleString()}
+                                                    </td>
+                                                    <td>
+                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => removeEditingRow(idx)}><i className="bi bi-trash"></i></button>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <th className="text-end">Totales:</th>
+                                            <th className="text-end">{editingTotals.total_items || 0}</th>
+                                            <th></th>
+                                            <th className="text-end">S/ {Number(editingTotals.total || 0).toLocaleString()}</th>
+                                            <th></th>
+                                        </tr>
+                                        <tr>
+                                            <td colSpan="3" className="text-end">Total con comisión:</td>
+                                            <td className="text-end">S/ {Number(editingTotals.total_con_comision || 0).toLocaleString()}</td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="modal-footer">
+                            <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                            <button type="button" className="btn btn-primary" onClick={saveEditedDetalle} disabled={savingEdit}>
+                                {savingEdit ? (
+                                    <><span className="spinner-border spinner-border-sm me-2"></span>Guardando...</>
+                                ) : (
+                                    <>Guardar cambios</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

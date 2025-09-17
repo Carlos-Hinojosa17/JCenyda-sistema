@@ -1,7 +1,7 @@
 ﻿// Configuración del entorno
 export const config = {
   // URL base del backend - CONFIGURADO PARA TU BACKEND
-  API_BASE_URL: 'http://localhost:5000/api',
+  API_BASE_URL: 'https://urban-capybara-g464979wjq4gfxv-5000.app.github.dev/api',
   
   // Configuraciones de timeout
   REQUEST_TIMEOUT: 10000, // 10 segundos

@@ -1,7 +1,8 @@
 ﻿import axios from 'axios';
+import { config } from '../config';
 
 // Configuración base de Axios
-const API_BASE_URL = 'http://localhost:5000/api'; // Tu backend en puerto 5000
+const API_BASE_URL = config.API_BASE_URL; // Usar la URL del archivo de configuración
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -45,16 +46,17 @@ export default api;
 
 // Función para verificar la conexión con el backend
 export const checkBackendConnection = async () => {
-  console.log('🔍 Verificando conexión con backend...', API_BASE_URL);
+  const testDbUrl = `${API_BASE_URL.replace('/api', '')}/test-db`;
+  console.log('🔍 Verificando conexión con backend y BD...', testDbUrl);
   try {
-    // Intentamos hacer una petición simple al servidor (ruta principal)
-    const response = await axios.get(`${API_BASE_URL.replace('/api', '')}`, { timeout: 3000 });
+    // Apuntar a la ruta de prueba de la base de datos
+    const response = await axios.get(testDbUrl, { timeout: 5000 });
     console.log('✅ Respuesta exitosa:', response);
     return {
       connected: true,
-      message: 'Conexión exitosa con el backend',
+      message: 'Conexión a BD exitosa.',
       status: response.status,
-      url: API_BASE_URL
+      url: testDbUrl
     };
   } catch (error) {
     console.log('⚠️ Error capturado:', error.response?.status, error.message);
