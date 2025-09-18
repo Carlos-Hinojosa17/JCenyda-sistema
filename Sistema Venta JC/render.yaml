@@ -1,0 +1,65 @@
+# Configuración de deploy para Render.com
+# Sistema de Ventas JC - Full Stack
+
+services:
+  # Backend - API Node.js + Express
+  - type: web
+    name: jc-backend
+    runtime: node
+    rootDir: ./backend-jc
+    buildCommand: npm install --production
+    startCommand: npm start
+    plan: free
+    env: node
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      # Variables de Supabase (configurar en Render Dashboard)
+      - key: SUPABASE_URL
+        fromSecret: SUPABASE_URL
+      - key: SUPABASE_KEY
+        fromSecret: SUPABASE_KEY
+      - key: JWT_SECRET
+        fromSecret: JWT_SECRET
+    healthCheckPath: /
+    
+  # Frontend - React + Vite (Static Site)
+  - type: web
+    name: jc-frontend
+    runtime: static
+    rootDir: ./frontend-jc
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    plan: free
+    env: static
+    buildFilter:
+      paths:
+        - frontend-jc/**
+    envVars:
+      # URL del backend (se auto-configura con el servicio de arriba)
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: jc-backend
+          property: url
+    # Configuración para SPA (Single Page Application)
+    headers:
+      - path: /*
+        headers:
+          - key: X-Frame-Options
+            value: DENY
+          - key: X-Content-Type-Options
+            value: nosniff
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+# Base de datos (opcional - ya tienes Supabase)
+# databases:
+#   - name: jc-database
+#     plan: free
+#     databaseName: sistema_ventas
+#     user: jc_user

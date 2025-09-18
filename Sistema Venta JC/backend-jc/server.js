@@ -28,20 +28,47 @@ const supabase = require('./src/config/database');
 const corsOptions = {
   origin: (origin, callback) => {
     console.log('🌐 Origin recibido:', origin); // 👈 Para depurar
+    
     const allowedOrigins = [
+      // Desarrollo local
       /^http:\/\/localhost:\d+$/,
-      /^https:\/\/urban-capybara-g464979wjq4gfxv-\d+\.app\.github\.dev\/?$/
+      /^http:\/\/127\.0\.0\.1:\d+$/,
+      
+      // GitHub Codespaces (cualquier puerto y nombre de codespace)
+      /^https:\/\/[a-zA-Z0-9-]+-g464979wjq4gfxv-\d+\.app\.github\.dev\/?$/,
+      
+      // GitHub Codespaces específico (por si acaso)
+      /^https:\/\/urban-capybara-g464979wjq4gfxv-\d+\.app\.github\.dev\/?$/,
+      
+      // Render.com - Producción
+      /^https:\/\/jc-frontend.*\.onrender\.com\/?$/,
+      /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com\/?$/,
+      
+      // Dominios personalizados (agregar cuando sea necesario)
+      // /^https:\/\/tu-dominio\.com$/
     ];
+    
+    // También verificar variables de entorno para orígenes adicionales
+    if (process.env.CORS_ORIGINS) {
+      const envOrigins = process.env.CORS_ORIGINS.split(',').map(origin => origin.trim());
+      envOrigins.forEach(envOrigin => {
+        allowedOrigins.push(new RegExp(`^${envOrigin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+      });
+    }
+    
     // Permitir sin 'origin' (Postman, apps móviles) o si hace match con la lista blanca
     if (!origin || allowedOrigins.some(regex => regex.test(origin))) {
+      console.log('✅ Origin permitido:', origin);
       callback(null, true);
     } else {
+      console.log('❌ Origin NO permitido:', origin);
       callback(new Error(`No permitido por CORS: ${origin}`));
     }
   },
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   credentials: true,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin']
 };
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Preflight para todas las rutas
@@ -49,11 +76,23 @@ app.options('*', cors(corsOptions)); // Preflight para todas las rutas
 // --- Middlewares de seguridad ---
 app.use(helmet());
 
-// Rate limiting
+// Rate limiting - Configuración ajustada para desarrollo
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100,
-  message: 'Demasiadas peticiones desde esta IP, intenta de nuevo más tarde.'
+  windowMs: 1 * 60 * 1000, // 1 minuto (en lugar de 15)
+  max: process.env.NODE_ENV === 'development' ? 1000 : 100, // 1000 en desarrollo, 100 en producción
+  message: {
+    error: 'Demasiadas peticiones desde esta IP, intenta de nuevo más tarde.',
+    retryAfter: '1 minuto'
+  },
+  standardHeaders: true, // Retorna rate limit info en los headers `RateLimit-*`
+  legacyHeaders: false, // Deshabilita los headers `X-RateLimit-*`
+  skip: (req) => {
+    // No aplicar rate limiting a rutas de prueba en desarrollo
+    if (process.env.NODE_ENV === 'development' && req.path === '/test-db') {
+      return true;
+    }
+    return false;
+  }
 });
 app.use(limiter);
 
