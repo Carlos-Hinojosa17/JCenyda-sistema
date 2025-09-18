@@ -34,7 +34,7 @@ git push origin main
 2. Haz click en **"New +"** → **"Web Service"**
 3. Conecta tu repositorio GitHub
 4. Configuración:
-   - **Name**: `jc-backend`
+   - **Name**: `JCenyda-sistema`
    - **Root Directory**: `backend-jc`
    - **Environment**: `Node`
    - **Build Command**: `npm install`
@@ -45,24 +45,25 @@ git push origin main
    ```
    NODE_ENV=production
    PORT=10000
-   SUPABASE_URL=https://tu-proyecto.supabase.co
-   SUPABASE_KEY=tu_supabase_service_role_key
-   JWT_SECRET=tu_jwt_secret_muy_seguro
+   SUPABASE_URL=https://eryvyznschdkgfrvevgo.supabase.co
+   SUPABASE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyeXZ5em5zY2hka2dmcnZldmdvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1Nzk2MjA4NSwiZXhwIjoyMDczNTM4MDg1fQ.0JEFRBkNtIChu6RdssMhF65xHRWTSxVC-vE9Nq4LF64
+   JWT_SECRET=sb_secret_djx6BDaULd7T4j0EnanJSg_aQIwt9xp
    ```
 
 ### 3. **Configurar Frontend en Render**
 
-1. En Render Dashboard → **"New +"** → **"Static Site"**
+1. En Render Dashboard → **"New +"** → **"Static Site"** (¡IMPORTANTE: Static Site, NO Web Service!)
 2. Conecta el mismo repositorio
 3. Configuración:
    - **Name**: `jc-frontend`
    - **Root Directory**: `frontend-jc`
    - **Build Command**: `npm install && npm run build`
    - **Publish Directory**: `dist`
+   - **Start Command**: (DEJAR VACÍO - no agregar nada aquí)
 
 4. **Variables de entorno**:
    ```
-   VITE_API_URL=https://jc-backend.onrender.com
+   VITE_API_URL=https://jcenyda-sistema.onrender.com
    ```
 
 ### 4. **Configurar Custom Domain** (Opcional)
@@ -88,7 +89,7 @@ Si tienes un dominio propio:
 
 | Variable | Descripción | Ejemplo |
 |----------|-------------|---------|
-| `VITE_API_URL` | URL del backend | `https://jc-backend.onrender.com` |
+| `VITE_API_URL` | URL del backend | `https://jcenyda-sistema.onrender.com` |
 
 ## 🛠️ Configuración Automática
 
@@ -103,9 +104,9 @@ El proyecto incluye:
 
 Después del deploy tendrás:
 
-- **Frontend**: `https://jc-frontend.onrender.com`
-- **Backend API**: `https://jc-backend.onrender.com/api`
-- **Health Check**: `https://jc-backend.onrender.com/test-db`
+- **Frontend**: `https://jcenyda-sistema-frontend.onrender.com`
+- **Backend API**: `https://jcenyda-sistema.onrender.com/api`
+- **Health Check**: `https://jcenyda-sistema.onrender.com/test-db`
 
 ## 🐛 Troubleshooting
 

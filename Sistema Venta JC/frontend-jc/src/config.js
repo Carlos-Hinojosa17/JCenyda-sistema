@@ -7,9 +7,16 @@ const getApiBaseUrl = () => {
   
   // Si estamos en producción (Render.com)
   if (window.location.hostname.includes('onrender.com')) {
-    // En Render, el backend tendrá un dominio similar pero diferente
+    // URLs específicas detectadas en tu deploy
+    if (window.location.hostname === 'jcenyda-sistema-frontend.onrender.com') {
+      return 'https://jcenyda-sistema.onrender.com/api';
+    }
+    
+    // Patrón general para otros casos
     const frontendDomain = window.location.hostname;
-    const backendDomain = frontendDomain.replace('jc-frontend', 'jc-backend');
+    const backendDomain = frontendDomain
+      .replace('jc-frontend', 'jc-backend')
+      .replace('-frontend', '');
     return `https://${backendDomain}/api`;
   }
   

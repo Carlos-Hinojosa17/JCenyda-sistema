@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import { productService, salesService, clientService, quotationService, authService } from '../services/apiServices';
 
 // Componente de error boundary para capturar errores
@@ -45,6 +45,9 @@ class ErrorBoundary extends React.Component {
 function VentaContent() {
     console.log('🚀 Venta component loading...');
     
+    // Estados para controlar si ya se intentó cargar datos
+    const [hasTriedLoading, setHasTriedLoading] = useState(false);
+    
     const [productos, setProductos] = useState([]);
     const [clientes, setClientes] = useState([]);
     const [carrito, setCarrito] = useState([]);
@@ -80,17 +83,23 @@ function VentaContent() {
 
     useEffect(() => {
         console.log('🔄 useEffect: Cargando datos iniciales...');
-        const loadData = async () => {
-            try {
-                await loadProducts();
-                await loadClients();
-            } catch (err) {
-                console.error('❌ Error en loadData:', err);
-                setError('Error al cargar datos iniciales');
-            }
-        };
-        loadData();
-    }, []);
+        
+        // Solo ejecutar si no se ha intentado cargar y no hay productos cargados
+        if (!hasTriedLoading && productos.length === 0) {
+            setHasTriedLoading(true);
+            
+            const loadData = async () => {
+                try {
+                    await loadProducts();
+                    await loadClients();
+                } catch (err) {
+                    console.error('❌ Error en loadData:', err);
+                    setError('Error al cargar datos iniciales');
+                }
+            };
+            loadData();
+        }
+    }, [loadProducts, loadClients, hasTriedLoading, productos.length]);
 
     useEffect(() => {
         console.log('💰 useEffect: Calculando total...', carrito.length);
@@ -176,19 +185,22 @@ function VentaContent() {
         cargarDatosCotizacion();
     }, []); // Solo ejecutar una vez al cargar el componente
 
-    const loadProducts = async () => {
+    // Funciones memoizadas para cargar datos
+    const loadProducts = useCallback(async () => {
         try {
             console.log('📦 Cargando productos...');
             const data = await productService.getAll();
             console.log('📦 Productos cargados:', data);
             setProductos(data.filter(p => p.estado)); // Solo productos activos
+            setError(''); // Limpiar error si carga exitosa
         } catch (error) {
             console.error('❌ Error al cargar productos:', error);
-            setError('Error al cargar productos: ' + (error.message || 'Error desconocido'));
+            const errorMsg = 'Error al cargar productos: ' + (error.message || 'Error desconocido');
+            setError(errorMsg);
         }
-    };
+    }, []);
 
-    const loadClients = async () => {
+    const loadClients = useCallback(async () => {
         try {
             console.log('👥 Cargando clientes...');
             const data = await clientService.getAll();
@@ -198,7 +210,7 @@ function VentaContent() {
             console.error('❌ Error al cargar clientes:', error);
             // No mostramos error de clientes ya que no es crítico
         }
-    };
+    }, []);
 
     // Obtener precio según el tipo seleccionado
     const obtenerPrecio = (producto) => {
