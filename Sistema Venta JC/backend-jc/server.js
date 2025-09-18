@@ -40,9 +40,14 @@ const corsOptions = {
       // GitHub Codespaces específico (por si acaso)
       /^https:\/\/urban-capybara-g464979wjq4gfxv-\d+\.app\.github\.dev\/?$/,
       
-      // Render.com - Producción
+      // Render.com - Producción (patrones amplios para cualquier nombre)
       /^https:\/\/jc-frontend.*\.onrender\.com\/?$/,
+      /^https:\/\/jcenyda-sistema-frontend\.onrender\.com\/?$/,
+      /^https:\/\/[a-zA-Z0-9-]*frontend[a-zA-Z0-9-]*\.onrender\.com\/?$/,
       /^https:\/\/[a-zA-Z0-9-]+\.onrender\.com\/?$/,
+      
+      // URLs específicas detectadas
+      'https://jcenyda-sistema-frontend.onrender.com',
       
       // Dominios personalizados (agregar cuando sea necesario)
       // /^https:\/\/tu-dominio\.com$/
