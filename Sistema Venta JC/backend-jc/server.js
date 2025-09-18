@@ -154,16 +154,22 @@ app.get('/test-db', async (req, res) => {
   }
 });
 
-// Rutas de la API
-app.use('/api/users', userRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/products', productRoutes);
+// Rutas de la API (usando nombres en español para consistencia)
+app.use('/api/usuarios', userRoutes);
+app.use('/api/clientes', clientRoutes);
+app.use('/api/productos', productRoutes);
 app.use('/api/almacen', almacenRoutes);
 app.use('/api/ventas', ventaRoutes);
-app.use('/api/detalle-venta', detalleVentaRoutes);
+app.use('/api/detalles-venta', detalleVentaRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/cotizaciones', cotizacionesRoutes);
+
+// Rutas de compatibilidad (inglés) para el frontend
+app.use('/api/users', userRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/detalle-venta', detalleVentaRoutes);
 
 // Ruta para 404
 app.use('*', (req, res) => {
