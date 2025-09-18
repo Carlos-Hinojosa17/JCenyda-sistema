@@ -232,56 +232,60 @@ function VentaContent() {
             product.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
         ), [productos, searchTerm]);
 
-    // 🚀 OPTIMIZACIÓN: Funciones del carrito memoizadas
+    // 🚀 OPTIMIZACIÓN: Funciones del carrito memoizadas (sin dependencias circulares)
+    const removeFromCart = useCallback((productId) => {
+        setCarrito(prevCarrito => prevCarrito.filter(item => item.id !== productId));
+    }, []); // Sin dependencias para evitar ciclos
+
     const addToCart = useCallback((product) => {
         // Validar stock disponible
-        const cantidadEnCarrito = carrito.find(item => item.id === product.id)?.cantidad || 0;
-        if (cantidadEnCarrito >= (product.stock || 0)) {
-            alert('Stock insuficiente para este producto');
-            return;
-        }
+        setCarrito(prevCarrito => {
+            const cantidadEnCarrito = prevCarrito.find(item => item.id === product.id)?.cantidad || 0;
+            if (cantidadEnCarrito >= (product.stock || 0)) {
+                alert('Stock insuficiente para este producto');
+                return prevCarrito;
+            }
 
-        const precio = obtenerPrecio(product);
-        const existingItem = carrito.find(item => item.id === product.id);
-        
-        if (existingItem) {
-            setCarrito(carrito.map(item =>
-                item.id === product.id
-                    ? { ...item, cantidad: item.cantidad + 1, precio: precio }
-                    : item
-            ));
-        } else {
-            setCarrito([...carrito, { 
-                ...product, 
-                cantidad: 1, 
-                precio: precio,
-                nombre: product.descripcion // Para compatibilidad
-            }]);
-        }
-    }, [carrito, obtenerPrecio]);
-
-    const removeFromCart = useCallback((productId) => {
-        setCarrito(carrito.filter(item => item.id !== productId));
-    }, [carrito]);
+            const precio = obtenerPrecio(product);
+            const existingItem = prevCarrito.find(item => item.id === product.id);
+            
+            if (existingItem) {
+                return prevCarrito.map(item =>
+                    item.id === product.id
+                        ? { ...item, cantidad: item.cantidad + 1, precio: precio }
+                        : item
+                );
+            } else {
+                return [...prevCarrito, { 
+                    ...product, 
+                    cantidad: 1, 
+                    precio: precio,
+                    nombre: product.descripcion // Para compatibilidad
+                }];
+            }
+        });
+    }, [obtenerPrecio]);
 
     const updateQuantity = useCallback((productId, newQuantity) => {
         if (newQuantity <= 0) {
             removeFromCart(productId);
         } else {
-            // Validar stock disponible
-            const producto = productos.find(p => p.id === productId);
-            if (producto && newQuantity > (producto.stock || 0)) {
-                alert(`Stock máximo disponible: ${producto.stock || 0}`);
-                return;
-            }
+            setCarrito(prevCarrito => {
+                // Validar stock disponible
+                const producto = productos.find(p => p.id === productId);
+                if (producto && newQuantity > (producto.stock || 0)) {
+                    alert(`Stock máximo disponible: ${producto.stock || 0}`);
+                    return prevCarrito;
+                }
 
-            setCarrito(carrito.map(item =>
-                item.id === productId
-                    ? { ...item, cantidad: newQuantity, precio: obtenerPrecio(producto || item) }
-                    : item
-            ));
+                return prevCarrito.map(item =>
+                    item.id === productId
+                        ? { ...item, cantidad: newQuantity, precio: obtenerPrecio(producto || item) }
+                        : item
+                );
+            });
         }
-    }, [carrito, productos, obtenerPrecio, removeFromCart]);
+    }, [productos, obtenerPrecio, removeFromCart]);
 
     // Funciones para editar precio en el carrito
     const iniciarEdicionPrecio = (productId, precioActual) => {
