@@ -4,7 +4,16 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression'); // 🚀 NUEVA: Compresión gzip
+const NodeCache = require('node-cache'); // 🚀 NUEVA: Cache en memoria
 require('dotenv').config();
+
+// 🚀 CACHE GLOBAL - 10 minutos TTL para datos frecuentes
+const cache = new NodeCache({ 
+  stdTTL: 600, // 10 minutos
+  checkperiod: 120, // Verificar expiración cada 2 minutos
+  useClones: false // Mejor rendimiento
+});
 
 // Importar rutas
 const clientRoutes = require('./src/routes/clientRoutes');
@@ -78,19 +87,62 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Preflight para todas las rutas
 
+// --- Middlewares de optimización ---
+// 🚀 COMPRESIÓN GZIP - Reducir tamaño de respuestas
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) {
+      return false; // No comprimir si se solicita explícitamente
+    }
+    return compression.filter(req, res);
+  },
+  level: 6, // Nivel de compresión balanceado
+  threshold: 1024 // Solo comprimir respuestas > 1KB
+}));
+
+// --- Middleware de cache ---
+// 🚀 CACHE MIDDLEWARE - Para rutas GET frecuentes
+const cacheMiddleware = (duration = 600) => (req, res, next) => {
+  // Solo cachear métodos GET
+  if (req.method !== 'GET') {
+    return next();
+  }
+  
+  const key = `${req.originalUrl || req.url}`;
+  const cached = cache.get(key);
+  
+  if (cached) {
+    console.log(`🚀 Cache HIT: ${key}`);
+    return res.json(cached);
+  }
+  
+  // Interceptar res.json para guardar en cache
+  const originalJson = res.json;
+  res.json = function(data) {
+    // Solo cachear respuestas exitosas
+    if (res.statusCode === 200) {
+      console.log(`💾 Guardando en cache: ${key}`);
+      cache.set(key, data, duration);
+    }
+    return originalJson.call(this, data);
+  };
+  
+  next();
+};
+
 // --- Middlewares de seguridad ---
 app.use(helmet());
 
-// Rate limiting - Configuración ajustada para desarrollo
+// Rate limiting - Configuración optimizada para producción
 const limiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minuto (en lugar de 15)
-  max: process.env.NODE_ENV === 'development' ? 1000 : 100, // 1000 en desarrollo, 100 en producción
+  windowMs: 1 * 60 * 1000, // 1 minuto
+  max: process.env.NODE_ENV === 'development' ? 1000 : 500, // 🚀 Incrementado a 500 en producción
   message: {
     error: 'Demasiadas peticiones desde esta IP, intenta de nuevo más tarde.',
     retryAfter: '1 minuto'
   },
-  standardHeaders: true, // Retorna rate limit info en los headers `RateLimit-*`
-  legacyHeaders: false, // Deshabilita los headers `X-RateLimit-*`
+  standardHeaders: true,
+  legacyHeaders: false,
   skip: (req) => {
     // No aplicar rate limiting a rutas de prueba en desarrollo
     if (process.env.NODE_ENV === 'development' && req.path === '/test-db') {
@@ -113,13 +165,13 @@ if (process.env.NODE_ENV === 'development') {
 // Servir archivos estáticos
 app.use('/uploads', express.static('uploads'));
 
-// Usar rutas
+// Usar rutas con cache para endpoints frecuentes
 app.use('/api/auth', authRoutes);
-app.use('/api/clientes', clientRoutes);
-app.use('/api/productos', productRoutes);
+app.use('/api/clientes', cacheMiddleware(300), clientRoutes); // 🚀 Cache 5 minutos
+app.use('/api/productos', cacheMiddleware(600), productRoutes); // 🚀 Cache 10 minutos  
 app.use('/api/usuarios', userRoutes);
-app.use('/api/almacen', almacenRoutes);
-app.use('/api/ventas', ventaRoutes);
+app.use('/api/almacen', cacheMiddleware(300), almacenRoutes); // 🚀 Cache 5 minutos
+app.use('/api/ventas', ventaRoutes); // Sin cache - datos dinámicos
 app.use('/api/detalles-venta', detalleVentaRoutes);
 app.use('/api/reportes', reporteRoutes);
 app.use('/api/cotizaciones', cotizacionesRoutes);

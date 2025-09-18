@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { productService, salesService, clientService, quotationService, authService } from '../services/apiServices';
 
 // Componente de error boundary para capturar errores
@@ -212,8 +212,8 @@ function VentaContent() {
         }
     }, []);
 
-    // Obtener precio según el tipo seleccionado
-    const obtenerPrecio = (producto) => {
+    // 🚀 OPTIMIZACIÓN: Funciones memoizadas para mejor rendimiento
+    const obtenerPrecio = useCallback((producto) => {
         switch (tipoPrecio) {
             case 'especial':
                 return producto.pre_especial || producto.pre_general || 0;
@@ -223,14 +223,17 @@ function VentaContent() {
             default:
                 return producto.pre_general || 0;
         }
-    };
+    }, [tipoPrecio]);
 
-    const filteredProducts = productos.filter(product =>
-        product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // 🚀 OPTIMIZACIÓN: Filtro de productos memoizado
+    const filteredProducts = useMemo(() => 
+        productos.filter(product =>
+            product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
+        ), [productos, searchTerm]);
 
-    const addToCart = (product) => {
+    // 🚀 OPTIMIZACIÓN: Funciones del carrito memoizadas
+    const addToCart = useCallback((product) => {
         // Validar stock disponible
         const cantidadEnCarrito = carrito.find(item => item.id === product.id)?.cantidad || 0;
         if (cantidadEnCarrito >= (product.stock || 0)) {
@@ -255,13 +258,13 @@ function VentaContent() {
                 nombre: product.descripcion // Para compatibilidad
             }]);
         }
-    };
+    }, [carrito, obtenerPrecio]);
 
-    const removeFromCart = (productId) => {
+    const removeFromCart = useCallback((productId) => {
         setCarrito(carrito.filter(item => item.id !== productId));
-    };
+    }, [carrito]);
 
-    const updateQuantity = (productId, newQuantity) => {
+    const updateQuantity = useCallback((productId, newQuantity) => {
         if (newQuantity <= 0) {
             removeFromCart(productId);
         } else {
@@ -278,7 +281,7 @@ function VentaContent() {
                     : item
             ));
         }
-    };
+    }, [carrito, productos, obtenerPrecio, removeFromCart]);
 
     // Funciones para editar precio en el carrito
     const iniciarEdicionPrecio = (productId, precioActual) => {
