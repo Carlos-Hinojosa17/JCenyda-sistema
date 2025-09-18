@@ -81,6 +81,109 @@ function VentaContent() {
     const [nombreMotorizado, setNombreMotorizado] = useState('');
     const [placaMoto, setPlacaMoto] = useState('');
 
+    // 🚀 FUNCIONES MEMOIZADAS - Definir ANTES de los useEffect que las usan
+    const loadProducts = useCallback(async () => {
+        try {
+            console.log('📦 Cargando productos...');
+            const data = await productService.getAll();
+            console.log('📦 Productos cargados:', data);
+            setProductos(data.filter(p => p.estado)); // Solo productos activos
+            setError(''); // Limpiar error si carga exitosa
+        } catch (error) {
+            console.error('❌ Error al cargar productos:', error);
+            const errorMsg = 'Error al cargar productos: ' + (error.message || 'Error desconocido');
+            setError(errorMsg);
+        }
+    }, []);
+
+    const loadClients = useCallback(async () => {
+        try {
+            console.log('👥 Cargando clientes...');
+            const data = await clientService.getAll();
+            console.log('👥 Clientes cargados:', data);
+            setClientes(data.filter(c => c.estado)); // Solo clientes activos
+        } catch (error) {
+            console.error('❌ Error al cargar clientes:', error);
+            // No mostramos error de clientes ya que no es crítico
+        }
+    }, []);
+
+    // 🚀 OPTIMIZACIÓN: Funciones memoizadas para mejor rendimiento
+    const obtenerPrecio = useCallback((producto) => {
+        switch (tipoPrecio) {
+            case 'especial':
+                return producto.pre_especial || producto.pre_general || 0;
+            case 'por_mayor':
+                return producto.pre_por_mayor || producto.pre_general || 0;
+            case 'general':
+            default:
+                return producto.pre_general || 0;
+        }
+    }, [tipoPrecio]);
+
+    // 🚀 OPTIMIZACIÓN: Filtro de productos memoizado
+    const filteredProducts = useMemo(() => 
+        productos.filter(product =>
+            product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
+        ), [productos, searchTerm]);
+
+    // 🚀 OPTIMIZACIÓN: Funciones del carrito memoizadas (sin dependencias circulares)
+    const removeFromCart = useCallback((productId) => {
+        setCarrito(prevCarrito => prevCarrito.filter(item => item.id !== productId));
+    }, []); // Sin dependencias para evitar ciclos
+
+    const addToCart = useCallback((product) => {
+        // Validar stock disponible
+        setCarrito(prevCarrito => {
+            const cantidadEnCarrito = prevCarrito.find(item => item.id === product.id)?.cantidad || 0;
+            if (cantidadEnCarrito >= (product.stock || 0)) {
+                alert('Stock insuficiente para este producto');
+                return prevCarrito;
+            }
+
+            const precio = obtenerPrecio(product);
+            const existingItem = prevCarrito.find(item => item.id === product.id);
+            
+            if (existingItem) {
+                return prevCarrito.map(item =>
+                    item.id === product.id
+                        ? { ...item, cantidad: item.cantidad + 1, precio: precio }
+                        : item
+                );
+            } else {
+                return [...prevCarrito, { 
+                    ...product, 
+                    cantidad: 1, 
+                    precio: precio,
+                    nombre: product.descripcion // Para compatibilidad
+                }];
+            }
+        });
+    }, [obtenerPrecio]);
+
+    const updateQuantity = useCallback((productId, newQuantity) => {
+        if (newQuantity <= 0) {
+            removeFromCart(productId);
+        } else {
+            setCarrito(prevCarrito => {
+                // Validar stock disponible
+                const producto = productos.find(p => p.id === productId);
+                if (producto && newQuantity > (producto.stock || 0)) {
+                    alert(`Stock máximo disponible: ${producto.stock || 0}`);
+                    return prevCarrito;
+                }
+
+                return prevCarrito.map(item =>
+                    item.id === productId
+                        ? { ...item, cantidad: newQuantity, precio: obtenerPrecio(producto || item) }
+                        : item
+                );
+            });
+        }
+    }, [productos, obtenerPrecio, removeFromCart]);
+
+    // USEEFFECTS - Después de todas las funciones
     useEffect(() => {
         console.log('🔄 useEffect: Cargando datos iniciales...');
         
@@ -184,108 +287,6 @@ function VentaContent() {
         
         cargarDatosCotizacion();
     }, []); // Solo ejecutar una vez al cargar el componente
-
-    // Funciones memoizadas para cargar datos
-    const loadProducts = useCallback(async () => {
-        try {
-            console.log('📦 Cargando productos...');
-            const data = await productService.getAll();
-            console.log('📦 Productos cargados:', data);
-            setProductos(data.filter(p => p.estado)); // Solo productos activos
-            setError(''); // Limpiar error si carga exitosa
-        } catch (error) {
-            console.error('❌ Error al cargar productos:', error);
-            const errorMsg = 'Error al cargar productos: ' + (error.message || 'Error desconocido');
-            setError(errorMsg);
-        }
-    }, []);
-
-    const loadClients = useCallback(async () => {
-        try {
-            console.log('👥 Cargando clientes...');
-            const data = await clientService.getAll();
-            console.log('👥 Clientes cargados:', data);
-            setClientes(data.filter(c => c.estado)); // Solo clientes activos
-        } catch (error) {
-            console.error('❌ Error al cargar clientes:', error);
-            // No mostramos error de clientes ya que no es crítico
-        }
-    }, []);
-
-    // 🚀 OPTIMIZACIÓN: Funciones memoizadas para mejor rendimiento
-    const obtenerPrecio = useCallback((producto) => {
-        switch (tipoPrecio) {
-            case 'especial':
-                return producto.pre_especial || producto.pre_general || 0;
-            case 'por_mayor':
-                return producto.pre_por_mayor || producto.pre_general || 0;
-            case 'general':
-            default:
-                return producto.pre_general || 0;
-        }
-    }, [tipoPrecio]);
-
-    // 🚀 OPTIMIZACIÓN: Filtro de productos memoizado
-    const filteredProducts = useMemo(() => 
-        productos.filter(product =>
-            product.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.codigo?.toLowerCase().includes(searchTerm.toLowerCase())
-        ), [productos, searchTerm]);
-
-    // 🚀 OPTIMIZACIÓN: Funciones del carrito memoizadas (sin dependencias circulares)
-    const removeFromCart = useCallback((productId) => {
-        setCarrito(prevCarrito => prevCarrito.filter(item => item.id !== productId));
-    }, []); // Sin dependencias para evitar ciclos
-
-    const addToCart = useCallback((product) => {
-        // Validar stock disponible
-        setCarrito(prevCarrito => {
-            const cantidadEnCarrito = prevCarrito.find(item => item.id === product.id)?.cantidad || 0;
-            if (cantidadEnCarrito >= (product.stock || 0)) {
-                alert('Stock insuficiente para este producto');
-                return prevCarrito;
-            }
-
-            const precio = obtenerPrecio(product);
-            const existingItem = prevCarrito.find(item => item.id === product.id);
-            
-            if (existingItem) {
-                return prevCarrito.map(item =>
-                    item.id === product.id
-                        ? { ...item, cantidad: item.cantidad + 1, precio: precio }
-                        : item
-                );
-            } else {
-                return [...prevCarrito, { 
-                    ...product, 
-                    cantidad: 1, 
-                    precio: precio,
-                    nombre: product.descripcion // Para compatibilidad
-                }];
-            }
-        });
-    }, [obtenerPrecio]);
-
-    const updateQuantity = useCallback((productId, newQuantity) => {
-        if (newQuantity <= 0) {
-            removeFromCart(productId);
-        } else {
-            setCarrito(prevCarrito => {
-                // Validar stock disponible
-                const producto = productos.find(p => p.id === productId);
-                if (producto && newQuantity > (producto.stock || 0)) {
-                    alert(`Stock máximo disponible: ${producto.stock || 0}`);
-                    return prevCarrito;
-                }
-
-                return prevCarrito.map(item =>
-                    item.id === productId
-                        ? { ...item, cantidad: newQuantity, precio: obtenerPrecio(producto || item) }
-                        : item
-                );
-            });
-        }
-    }, [productos, obtenerPrecio, removeFromCart]);
 
     // Funciones para editar precio en el carrito
     const iniciarEdicionPrecio = (productId, precioActual) => {
