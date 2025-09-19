@@ -1,15 +1,16 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services/apiServices';
-import { checkBackendConnection } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 
 export default function Login() {
     const [credentials, setCredentials] = useState({ usuario: '', contrasena: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const [connectionStatus, setConnectionStatus] = useState(null);
-    const [showConnectionAlert, setShowConnectionAlert] = useState(false);
+    const [fieldState, setFieldState] = useState({
+        usuario: 'normal', // normal, error
+        contrasena: 'normal' // normal, error
+    });
     const navigate = useNavigate();
     const { login: authLogin, isAuthenticated } = useAuth();
 
@@ -41,18 +42,6 @@ export default function Login() {
         }
     }, [isAuthenticated, navigate]);
 
-    useEffect(() => {
-        const verifyConnection = async () => {
-            const status = await checkBackendConnection();
-            setConnectionStatus(status);
-            setShowConnectionAlert(true);
-            setTimeout(() => {
-                setShowConnectionAlert(false);
-            }, 5000);
-        };
-        verifyConnection();
-    }, []);
-
     // Nota: la lógica para listar clientes fue removida temporalmente para evitar
     // errores en desarrollo (se usará una prueba de conexión independiente).
 
@@ -60,6 +49,7 @@ export default function Login() {
         e.preventDefault();
         setLoading(true);
         setError('');
+        setFieldState({ usuario: 'normal', contrasena: 'normal' });
 
         try {
             console.log('🔄 Iniciando proceso de login...');
@@ -75,7 +65,7 @@ export default function Login() {
                 
                 // Redirigir según el rol del usuario
                 const userRole = response.user.rol || response.user.tipo;
-                console.log('� Rol del usuario:', userRole);
+                console.log('📋 Rol del usuario:', userRole);
                 
                 if (userRole === 'administrador' || userRole === 'admin') {
                     console.log('🚀 Redirigiendo admin a /layouts/principal');
@@ -97,59 +87,87 @@ export default function Login() {
             }
         } catch (error) {
             console.error('❌ Error en handleSubmit:', error);
-            setError(error.message || 'Error al iniciar sesion');
+            const errorMessage = error.message || 'Error al iniciar sesion';
+            
+            // Manejar errores específicos
+            if (errorMessage.toLowerCase().includes('usuario') || 
+                errorMessage.toLowerCase().includes('user') ||
+                errorMessage.toLowerCase().includes('no encontrado') ||
+                errorMessage.toLowerCase().includes('not found')) {
+                
+                // Usuario incorrecto - limpiar contraseña y marcar usuario como error
+                setCredentials(prev => ({ ...prev, contrasena: '' }));
+                setFieldState({ usuario: 'error', contrasena: 'normal' });
+                
+            } else if (errorMessage.toLowerCase().includes('contraseña') || 
+                       errorMessage.toLowerCase().includes('password') ||
+                       errorMessage.toLowerCase().includes('credencial')) {
+                
+                // Contraseña incorrecta - marcar solo contraseña como error
+                setFieldState({ usuario: 'normal', contrasena: 'error' });
+                
+            } else {
+                // Error general
+                setError(errorMessage);
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    const testConnection = async () => {
-        setLoading(true);
-        const status = await checkBackendConnection();
-        setConnectionStatus(status);
-        setShowConnectionAlert(true);
-        setLoading(false);
-        setTimeout(() => {
-            setShowConnectionAlert(false);
-        }, 5000);
-    };
-
     return (
-        <div className="container vh-100 d-flex justify-content-center align-items-center">
-            {showConnectionAlert && connectionStatus && (
-                <div
-                    className={
-                        "alert alert-" +
-                        (connectionStatus.connected ? "success" : "danger") +
-                        " position-fixed"
-                    }
-                    style={{ top: "20px", right: "20px", zIndex: 1050, minWidth: "300px" }}
+        <div 
+            className="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center"
+            style={{
+                background: 'linear-gradient(135deg, #2C3E50 0%, #34495E 100%)',
+                fontFamily: "'Segoe UI', system-ui, sans-serif",
+                overflow: 'hidden'
+            }}
+        >
+            {/* Overlay pattern */}
+            <div 
+                className="position-absolute w-100 h-100"
+                style={{
+                    background: 'url("data:image/svg+xml,%3Csvg width="80" height="80" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23F09836" fill-opacity="0.08"%3E%3Ccircle cx="40" cy="40" r="6"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                    zIndex: 1
+                }}
+            />
+            
+            <div className="position-relative" style={{ zIndex: 2 }}>
+                <div 
+                    className="card shadow-lg border-0" 
+                    style={{
+                        width: '420px',
+                        borderRadius: '16px',
+                        backdropFilter: 'blur(10px)',
+                        background: 'rgba(255, 255, 255, 0.95)'
+                    }}
                 >
-                    <div className="d-flex align-items-center">
-                        <div>
-                            <strong>{connectionStatus.connected ? "Backend Conectado" : "Error de Conexion"}</strong>
-                            <br />
-                            <small>{connectionStatus.message}</small>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="card" style={{width: '400px'}}>
-                <div className="card-body">
-                    <h3 className="card-title text-center mb-4">Sistema JC - Login</h3>
-                    
-                    <div className="alert alert-info mb-3">
-                        <h6 className="mb-2">👥 Usuarios Disponibles:</h6>
-                        <div className="small">
-                            <strong>Administradores:</strong><br/>
-                            • admin / admin123<br/>
-                            • CarlosH (consulta tu contraseña)<br/>
-                            <br/>
-                            <strong>Vendedor:</strong><br/>
-                            • vendedor / vendedor123<br/>
-                        </div>
-                        {/* Información adicional removida temporalmente para evitar errores en desarrollo */}
+                <div className="card-body p-4">
+                    <div className="text-center mb-4">
+                        <h2 
+                            className="fw-bold mb-2"
+                            style={{
+                                fontSize: '4.2rem',
+                                background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text',
+                                letterSpacing: '-0.5px'
+                            }}
+                        >
+                            JC ENYDA
+                        </h2>
+                        <p className="fw-semibold mb-1" style={{ 
+                            fontSize: '1.1rem', 
+                            color: '#2C3E50',
+                            letterSpacing: '0.5px' 
+                        }}>
+                            AUTOPARTS
+                        </p>
+                        <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+                            Sistema de Gestión de Ventas
+                        </p>
                     </div>
                     
                     <form onSubmit={handleSubmit}>
@@ -159,44 +177,126 @@ export default function Login() {
                             </div>
                         )}
                         <div className="mb-3">
-                            <label className="form-label">Usuario</label>
+                            <label className="fw-semibold" style={{ 
+                                fontSize: '0.95rem',
+                                color: fieldState.usuario === 'error' ? '#dc3545' : '#2C3E50' 
+                            }}>
+                                Usuario
+                            </label>
                             <input
                                 type="text"
-                                className="form-control"
+                                className="form-control py-3"
+                                style={{
+                                    borderRadius: '12px',
+                                    border: `2px solid ${fieldState.usuario === 'error' ? '#dc3545' : '#e9ecef'}`,
+                                    fontSize: '1rem',
+                                    transition: 'all 0.3s ease',
+                                    backgroundColor: fieldState.usuario === 'error' ? '#fff5f5' : 'white'
+                                }}
                                 value={credentials.usuario}
-                                onChange={(e) => setCredentials({...credentials, usuario: e.target.value})}
+                                onChange={(e) => {
+                                    setCredentials({...credentials, usuario: e.target.value});
+                                    // Limpiar error cuando el usuario empiece a escribir
+                                    if (fieldState.usuario === 'error') {
+                                        setFieldState(prev => ({ ...prev, usuario: 'normal' }));
+                                    }
+                                }}
                                 required
                                 disabled={loading}
+                                onFocus={(e) => {
+                                    if (fieldState.usuario !== 'error') {
+                                        e.target.style.borderColor = '#F09836';
+                                        e.target.style.boxShadow = '0 0 0 0.2rem rgba(240, 152, 54, 0.25)';
+                                    }
+                                }}
+                                onBlur={(e) => {
+                                    if (fieldState.usuario !== 'error') {
+                                        e.target.style.borderColor = '#e9ecef';
+                                        e.target.style.boxShadow = 'none';
+                                    }
+                                }}
                             />
                         </div>
-                        <div className="mb-3">
-                            <label className="form-label">Contrasena</label>
+                        <div className="mb-4">
+                            <label className="fw-semibold" style={{ 
+                                fontSize: '0.95rem',
+                                color: fieldState.contrasena === 'error' ? '#dc3545' : '#2C3E50' 
+                            }}>
+                                Contraseña
+                            </label>
                             <input
                                 type="password"
-                                className="form-control"
+                                className="form-control py-3"
+                                style={{
+                                    borderRadius: '12px',
+                                    border: `2px solid ${fieldState.contrasena === 'error' ? '#dc3545' : '#e9ecef'}`,
+                                    fontSize: '1rem',
+                                    transition: 'all 0.3s ease',
+                                    backgroundColor: fieldState.contrasena === 'error' ? '#fff5f5' : 'white'
+                                }}
                                 value={credentials.contrasena}
-                                onChange={(e) => setCredentials({...credentials, contrasena: e.target.value})}
+                                onChange={(e) => {
+                                    setCredentials({...credentials, contrasena: e.target.value});
+                                    // Limpiar error cuando el usuario empiece a escribir
+                                    if (fieldState.contrasena === 'error') {
+                                        setFieldState(prev => ({ ...prev, contrasena: 'normal' }));
+                                    }
+                                }}
                                 required
                                 disabled={loading}
+                                onFocus={(e) => {
+                                    if (fieldState.contrasena !== 'error') {
+                                        e.target.style.borderColor = '#F09836';
+                                        e.target.style.boxShadow = '0 0 0 0.2rem rgba(240, 152, 54, 0.25)';
+                                    }
+                                }}
+                                onBlur={(e) => {
+                                    if (fieldState.contrasena !== 'error') {
+                                        e.target.style.borderColor = '#e9ecef';
+                                        e.target.style.boxShadow = 'none';
+                                    }
+                                }}
                             />
                         </div>
-                        <button type="submit" className="btn btn-primary w-100" disabled={loading}>
-                            {loading ? 'Iniciando sesion...' : 'Iniciar Sesion'}
+                        <button 
+                            type="submit" 
+                            className="btn w-100 py-3 fw-semibold"
+                            disabled={loading}
+                            style={{
+                                background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
+                                border: 'none',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontSize: '1.1rem',
+                                transition: 'all 0.3s ease',
+                                boxShadow: '0 4px 15px rgba(240, 152, 54, 0.4)'
+                            }}
+                            onMouseEnter={(e) => {
+                                if (!loading) {
+                                    e.target.style.transform = 'translateY(-2px)';
+                                    e.target.style.boxShadow = '0 6px 20px rgba(240, 152, 54, 0.6)';
+                                }
+                            }}
+                            onMouseLeave={(e) => {
+                                if (!loading) {
+                                    e.target.style.transform = 'translateY(0px)';
+                                    e.target.style.boxShadow = '0 4px 15px rgba(240, 152, 54, 0.4)';
+                                }
+                            }}
+                        >
+                            {loading ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Iniciando sesión...
+                                </>
+                            ) : (
+                                'Iniciar Sesión'
+                            )}
                         </button>
-                        
-                        <div className="mt-3">
-                            <button 
-                                type="button" 
-                                className="btn btn-outline-secondary w-100"
-                                onClick={testConnection}
-                                disabled={loading}
-                            >
-                                Probar Conexion Backend
-                            </button>
-                        </div>
                     </form>
                 </div>
             </div>
         </div>
+    </div>
     );
 }

@@ -24,10 +24,21 @@ a:hover {
 
 body {
   margin: 0;
-  display: flex;
-  place-items: center;
+  padding: 0;
   min-width: 320px;
   min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  background-color: #f8f9fa;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  background-color: #f8f9fa;
 }
 
 h1 {
@@ -64,5 +75,161 @@ button:focus-visible {
   }
   button {
     background-color: #f9f9f9;
+  }
+}
+
+/* Animaciones para métrica de ventas */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Prevenir espacios en negro */
+html, body {
+  overflow-x: hidden;
+  background-color: #f8f9fa !important;
+}
+
+/* Asegurar que el contenedor principal ocupe toda la altura */
+.d-flex.vh-100, .d-flex[style*="minHeight"] {
+  min-height: 100vh !important;
+  height: auto !important;
+}
+
+/* Clase para elementos con animación de entrada */
+.fade-in-up {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+/* Efectos de resplandor para métricas */
+.metric-glow {
+  transition: all 0.3s ease;
+}
+
+.metric-glow:hover {
+  filter: drop-shadow(0 0 20px rgba(240, 152, 54, 0.4));
+  transform: translateY(-3px);
+}
+
+/* Animación de giro para spinners */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Efectos para modales mejorados */
+.modal.show {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.modal-content {
+  transition: all 0.3s ease;
+}
+
+/* Estilos para botones redondeados */
+.btn.rounded-pill {
+  border-radius: 50px !important;
+  transition: all 0.3s ease;
+}
+
+.btn.rounded-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Efectos para cards */
+.card {
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+/* Estilos para badges mejorados */
+.badge {
+  transition: all 0.3s ease;
+}
+
+.badge:hover {
+  transform: scale(1.05);
+}
+
+/* Estilos para paginación moderna */
+.pagination .page-link {
+  transition: all 0.3s ease;
+  margin: 0 2px;
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+}
+
+.pagination .page-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.pagination .page-item.active .page-link {
+  box-shadow: 0 4px 20px rgba(23, 162, 184, 0.4);
+}
+
+.pagination .page-item.disabled .page-link {
+  background: #f8f9fa !important;
+  color: #6c757d !important;
+  cursor: not-allowed;
+}
+
+/* Efectos para cards de paginación */
+.card-footer {
+  transition: all 0.3s ease;
+}
+
+/* Responsive adjustments para móviles */
+@media (max-width: 768px) {
+  .pagination .page-link:hover {
+    transform: none;
+  }
+  
+  .pagination {
+    justify-content: center !important;
+  }
+  
+  .pagination .page-link {
+    min-width: 35px;
+    height: 35px;
+    font-size: 0.875rem;
   }
 }
