@@ -6,6 +6,7 @@ const {
   createUsuario,
   updateUsuario,
   deleteUsuario,
+  toggleUserStatus, // Nueva función
 } = require('../controllers/usuarioController');
 
 router.get('/', getUsuarios);
@@ -13,6 +14,12 @@ router.get('/:id', getUsuario);
 router.post('/', createUsuario);
 router.put('/:id', updateUsuario);
 router.delete('/:id', deleteUsuario);
+
+// Nuevo endpoint para cambiar estado del usuario
+router.patch('/:id/status', (req, res, next) => {
+  console.log('🎯 PATCH /:id/status endpoint llamado!', { id: req.params.id, body: req.body });
+  toggleUserStatus(req, res, next);
+});
 
 // Endpoint temporal para crear usuarios de prueba
 router.post('/init-test-users', async (req, res) => {

@@ -122,51 +122,144 @@ export default function Principal() {
 
     return (
         <div 
-            className='d-flex flex-column'
+            className='d-flex flex-column min-vh-100'
             style={{
-                fontFamily: "'Segoe UI', system-ui, sans-serif",
-                background: 'linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)',
-                minHeight: '100vh',
+                fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
                 width: '100%',
                 overflow: 'hidden'
             }}
         >
-            {/* Header Section */}
+            {/* CSS for pulse animation */}
+            <style>
+                {`
+                    @keyframes pulse {
+                        0% { opacity: 1; }
+                        50% { opacity: 0.5; }
+                        100% { opacity: 1; }
+                    }
+                `}
+            </style>
+            
+            {/* Header Section Mejorado */}
             <div 
-                className='p-4 border-bottom'
+                className='p-4 p-md-5'
                 style={{
-                    background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-                    borderBottom: '2px solid rgba(240, 152, 54, 0.1)'
+                    background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 50%, #4a2c7e 100%)',
+                    color: 'white',
+                    borderBottom: '3px solid rgba(240, 152, 54, 0.8)',
+                    boxShadow: '0 8px 32px rgba(111, 66, 193, 0.2)',
+                    position: 'relative',
+                    overflow: 'hidden'
                 }}
             >
-                <div className='d-flex justify-content-between align-items-center'>
+                {/* Decorative background pattern */}
+                <div 
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        width: '300px',
+                        height: '100%',
+                        background: 'linear-gradient(45deg, rgba(240, 152, 54, 0.1) 0%, rgba(240, 152, 54, 0.05) 100%)',
+                        borderRadius: '50px 0 0 50px',
+                        zIndex: 0
+                    }}
+                />
+                
+                <div className='d-flex justify-content-between align-items-center position-relative' style={{ zIndex: 1 }}>
                     <div>
-                        <h2 
-                            className='mb-1 fw-bold'
-                            style={{
-                                background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                                backgroundClip: 'text',
-                                fontSize: '2rem'
-                            }}
-                        >
-                            Dashboard Principal
-                        </h2>
-                        <p className='mb-0 text-muted'>Resumen ejecutivo de JC ENYDA AUTOPARTS</p>
+                        <div className='d-flex align-items-center mb-3'>
+                            <div 
+                                className='me-3 d-flex align-items-center justify-content-center'
+                                style={{
+                                    width: '60px',
+                                    height: '60px',
+                                    background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
+                                    borderRadius: '16px',
+                                    boxShadow: '0 8px 20px rgba(240, 152, 54, 0.3)'
+                                }}
+                            >
+                                <i className='bi bi-speedometer2' style={{ fontSize: '2rem', color: 'white' }}></i>
+                            </div>
+                            <div>
+                                <h1 
+                                    className='mb-0 fw-bold'
+                                    style={{
+                                        fontSize: 'clamp(1.8rem, 4vw, 2.5rem)',
+                                        letterSpacing: '-0.5px',
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                >
+                                    Dashboard Principal
+                                </h1>
+                                <p className='mb-0 opacity-75 mt-1' style={{ fontSize: '1.1rem' }}>
+                                    Panel de control ejecutivo
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div className='d-flex align-items-center gap-3'>
+                            <span 
+                                className='badge px-3 py-2'
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.2)',
+                                    color: 'white',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '500',
+                                    borderRadius: '12px',
+                                    backdropFilter: 'blur(10px)'
+                                }}
+                            >
+                                <i className='bi bi-building me-2'></i>
+                                JC ENYDA AUTOPARTS
+                            </span>
+                            <span 
+                                className='badge px-3 py-2'
+                                style={{
+                                    background: 'rgba(240, 152, 54, 0.2)',
+                                    color: 'white',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '500',
+                                    borderRadius: '12px',
+                                    border: '1px solid rgba(240, 152, 54, 0.3)'
+                                }}
+                            >
+                                <i className='bi bi-calendar3 me-2'></i>
+                                {new Date().toLocaleDateString('es-ES', { 
+                                    weekday: 'long', 
+                                    year: 'numeric', 
+                                    month: 'long', 
+                                    day: 'numeric' 
+                                })}
+                            </span>
+                        </div>
                     </div>
                     
                     <div className='d-flex align-items-center gap-3'>
-                        {/* Botones de acción */}
+                        
+                        {/* Botones de acción mejorados */}
                         <div className='d-flex gap-2'>
                             <button 
-                                className='btn btn-outline-secondary d-flex align-items-center gap-2' 
+                                className='btn d-flex align-items-center gap-2' 
                                 onClick={loadMetrics} 
                                 disabled={loading}
                                 style={{
-                                    borderRadius: '10px',
-                                    border: '2px solid #6c757d',
-                                    fontWeight: '500'
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    color: 'white',
+                                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                                    borderRadius: '12px',
+                                    fontWeight: '500',
+                                    backdropFilter: 'blur(10px)',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    e.target.style.background = 'rgba(255, 255, 255, 0.25)';
+                                    e.target.style.transform = 'translateY(-1px)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.target.style.background = 'rgba(255, 255, 255, 0.15)';
+                                    e.target.style.transform = 'translateY(0)';
                                 }}
                             >
                                 {loading ? (
@@ -181,12 +274,22 @@ export default function Principal() {
                                 style={{
                                     background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
                                     border: 'none',
-                                    borderRadius: '10px',
+                                    borderRadius: '12px',
                                     color: 'white',
-                                    fontWeight: '500',
-                                    boxShadow: '0 4px 15px rgba(240, 152, 54, 0.3)'
+                                    fontWeight: '600',
+                                    boxShadow: '0 6px 20px rgba(240, 152, 54, 0.4)',
+                                    transition: 'all 0.3s ease',
+                                    padding: '8px 16px'
                                 }}
                                 onClick={() => navigate('/layouts/venta')}
+                                onMouseEnter={(e) => {
+                                    e.target.style.transform = 'translateY(-2px)';
+                                    e.target.style.boxShadow = '0 8px 25px rgba(240, 152, 54, 0.5)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.target.style.transform = 'translateY(0)';
+                                    e.target.style.boxShadow = '0 6px 20px rgba(240, 152, 54, 0.4)';
+                                }}
                             >
                                 <i className='bi bi-cart-plus'></i>
                                 <span>Nueva Venta</span>
@@ -336,8 +439,19 @@ export default function Principal() {
                     </div>
                 )}
 
-                {/* Main Content: Two Columns */}
-                <div className='row g-4' style={{ height: '100%' }}>
+                {/* Main Content Mejorado */}
+                <div 
+                    className='flex-grow-1 p-4 p-md-5'
+                    style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.8) 100%)',
+                        backdropFilter: 'blur(10px)',
+                        borderRadius: '24px 24px 0 0',
+                        marginTop: '-20px',
+                        position: 'relative',
+                        zIndex: 1
+                    }}
+                >
+                    <div className='row g-4' style={{ height: '100%' }}>
                     {/* Reportes Column */}
                     <div className='col-12 col-lg-6' style={{ height: '100%' }}>
                         <div 
@@ -551,6 +665,7 @@ export default function Principal() {
                     </div>
                 </div>
             </div>
+        </div>
         </div>
     );
 }

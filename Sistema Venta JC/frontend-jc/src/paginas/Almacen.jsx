@@ -5,6 +5,7 @@ export default function Almacen() {
     const [productos, setProductos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
     const [filtroStock, setFiltroStock] = useState('todos'); // todos, normal, bajo, agotado
     const [busqueda, setBusqueda] = useState('');
     const [stockMinimo, setStockMinimo] = useState(10); // Umbral para stock bajo
@@ -16,6 +17,16 @@ export default function Almacen() {
     useEffect(() => {
         cargarProductos();
     }, []);
+
+    // Auto-ocultar mensajes de éxito después de 4 segundos
+    useEffect(() => {
+        if (success) {
+            const timer = setTimeout(() => {
+                setSuccess('');
+            }, 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [success]);
 
     const cargarProductos = async () => {
         setLoading(true);
@@ -84,12 +95,13 @@ export default function Almacen() {
 
     const procesarEntradaStock = async () => {
         if (!productoSeleccionado || !cantidadEntrada || cantidadEntrada <= 0) {
-            alert('Por favor ingrese una cantidad válida');
+            setError('Por favor ingrese una cantidad válida');
             return;
         }
 
         try {
             setLoading(true);
+            setError('');
             const nuevoStock = (productoSeleccionado.stock || 0) + parseInt(cantidadEntrada);
             
             await productService.update(productoSeleccionado.id, {
@@ -107,38 +119,83 @@ export default function Almacen() {
             );
 
             setShowModalStock(false);
-            alert(`Stock actualizado. Nuevo stock: ${nuevoStock}`);
+            setSuccess(`✅ Stock actualizado exitosamente para "${productoSeleccionado.descripcion}". Nuevo stock: ${nuevoStock.toLocaleString()} unidades`);
         } catch (error) {
             console.error('❌ Error al actualizar stock:', error);
-            alert('Error al actualizar stock: ' + (error.message || 'Error desconocido'));
+            setError('Error al actualizar stock: ' + (error.message || 'Error desconocido'));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className='container-fluid p-4'>
-            {/* Header */}
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2 className='mb-0'>
-                    <i className="bi bi-boxes me-2"></i>
-                    Control de Almacén
-                </h2>
-                <button 
-                    className="btn btn-outline-info"
-                    onClick={cargarProductos}
-                    disabled={loading}
-                >
-                    <i className="bi bi-arrow-clockwise me-2"></i>
-                    {loading ? 'Cargando...' : 'Actualizar'}
-                </button>
-            </div>
+        <div className="min-vh-100" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            {/* Encabezado corporativo JC ENYDA */}
+            <div className="container-fluid">
+                <div className="row">
+                    <div className="col-12">
+                        <div className="card border-0 shadow-lg" style={{ 
+                            background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 25%, #17a2b8 100%)',
+                            borderRadius: '0 0 30px 30px',
+                            marginBottom: '2rem'
+                        }}>
+                            <div className="card-body text-white p-4">
+                                <div className="d-flex flex-column flex-md-row justify-content-between align-items-center">
+                                    <div className="text-center text-md-start mb-3 mb-md-0">
+                                        <h1 className="display-6 fw-bold mb-2 fade-in-up">
+                                            <i className="bi bi-boxes me-3"></i>
+                                            Control de Almacén
+                                        </h1>
+                                        <p className="lead mb-0 opacity-75">Sistema de gestión y control de inventario JC ENYDA</p>
+                                    </div>
+                                    <div className="d-flex gap-2">
+                                        <button 
+                                            className="btn btn-light btn-lg shadow-sm"
+                                            onClick={cargarProductos}
+                                            disabled={loading}
+                                        >
+                                            <i className={`bi ${loading ? 'bi-arrow-clockwise spin' : 'bi-arrow-clockwise'} me-2`}></i>
+                                            Actualizar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
             {/* Mensaje de error */}
             {error && (
-                <div className="alert alert-danger d-flex align-items-center" role="alert">
+                <div className="alert alert-danger alert-dismissible d-flex align-items-center shadow-sm" role="alert">
                     <i className="bi bi-exclamation-triangle-fill me-2"></i>
                     {error}
+                    <button 
+                        type="button" 
+                        className="btn-close" 
+                        onClick={() => setError('')}
+                    ></button>
+                </div>
+            )}
+
+            {/* Mensaje de éxito */}
+            {success && (
+                <div className="alert alert-success alert-dismissible d-flex align-items-center shadow-sm" role="alert" style={{
+                    background: 'linear-gradient(135deg, #d1edff 0%, #c3f7df 100%)',
+                    border: '1px solid #20c997',
+                    borderRadius: '15px'
+                }}>
+                    <div className="rounded-circle bg-success bg-opacity-20 p-2 me-3">
+                        <i className="bi bi-check-circle-fill text-success fs-5"></i>
+                    </div>
+                    <div className="flex-grow-1">
+                        <strong className="text-success">¡Actualización Exitosa!</strong>
+                        <div className="text-success-emphasis">{success}</div>
+                    </div>
+                    <button 
+                        type="button" 
+                        className="btn-close" 
+                        onClick={() => setSuccess('')}
+                    ></button>
                 </div>
             )}
 
@@ -204,29 +261,33 @@ export default function Almacen() {
                 <div className="col-md-6">
                     <div className="btn-group w-100" role="group">
                         <button
-                            className={`btn ${filtroStock === 'todos' ? 'btn-primary' : 'btn-outline-primary'}`}
+                            className={`btn ${filtroStock === 'todos' ? 'btn-primary' : 'btn-light border-primary text-primary'}`}
                             onClick={() => setFiltroStock('todos')}
+                            style={{ fontWeight: filtroStock === 'todos' ? 'bold' : '500' }}
                         >
                             <i className="bi bi-list me-1"></i>
                             Todos ({productos.filter(p => p.estado).length})
                         </button>
                         <button
-                            className={`btn ${filtroStock === 'normal' ? 'btn-success' : 'btn-outline-success'}`}
+                            className={`btn ${filtroStock === 'normal' ? 'btn-success' : 'btn-light border-success text-success'}`}
                             onClick={() => setFiltroStock('normal')}
+                            style={{ fontWeight: filtroStock === 'normal' ? 'bold' : '500' }}
                         >
                             <i className="bi bi-check-circle me-1"></i>
                             Normal ({productos.filter(p => p.estado && (p.stock || 0) > stockMinimo).length})
                         </button>
                         <button
-                            className={`btn ${filtroStock === 'bajo' ? 'btn-warning' : 'btn-outline-warning'}`}
+                            className={`btn ${filtroStock === 'bajo' ? 'btn-warning' : 'btn-light border-warning text-warning'}`}
                             onClick={() => setFiltroStock('bajo')}
+                            style={{ fontWeight: filtroStock === 'bajo' ? 'bold' : '500' }}
                         >
                             <i className="bi bi-exclamation-triangle me-1"></i>
                             Bajo ({productos.filter(p => p.estado && (p.stock || 0) > 0 && (p.stock || 0) <= stockMinimo).length})
                         </button>
                         <button
-                            className={`btn ${filtroStock === 'agotado' ? 'btn-danger' : 'btn-outline-danger'}`}
+                            className={`btn ${filtroStock === 'agotado' ? 'btn-danger' : 'btn-light border-danger text-danger'}`}
                             onClick={() => setFiltroStock('agotado')}
+                            style={{ fontWeight: filtroStock === 'agotado' ? 'bold' : '500' }}
                         >
                             <i className="bi bi-x-circle me-1"></i>
                             Agotado ({productos.filter(p => p.estado && (p.stock || 0) === 0).length})
@@ -256,27 +317,44 @@ export default function Almacen() {
             </div>
 
             {/* Tabla de inventario */}
-            <div className='card'>
-                <div className="card-header d-flex justify-content-between align-items-center">
-                    <h5 className="mb-0">
-                        <i className="bi bi-table me-2"></i>
-                        Inventario de Productos
-                    </h5>
-                    <span className="badge bg-primary">
-                        {productosFiltrados.length} producto{productosFiltrados.length !== 1 ? 's' : ''}
-                    </span>
+            <div className='card border-0 shadow-sm'>
+                <div className="card-header border-0 p-4" style={{ 
+                    background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)',
+                    color: 'white'
+                }}>
+                    <div className="d-flex justify-content-between align-items-center">
+                        <h5 className="mb-0 fw-bold">
+                            <i className="bi bi-table me-2"></i>
+                            Inventario de Productos
+                        </h5>
+                        <span className="badge bg-white text-primary fs-6 px-3 py-2">
+                            {productosFiltrados.length} producto{productosFiltrados.length !== 1 ? 's' : ''}
+                        </span>
+                    </div>
                 </div>
                 <div className='card-body p-0'>
                     <div className='table-responsive'>
                         <table className='table table-hover mb-0'>
-                            <thead className="table-dark">
+                            <thead style={{ background: 'linear-gradient(90deg, #6f42c1, #563d7c)', color: 'white' }}>
                                 <tr>
-                                    <th>Código</th>
-                                    <th>Producto</th>
-                                    <th>Stock Actual</th>
-                                    <th>Precios</th>
-                                    <th>Estado Stock</th>
-                                    <th>Acciones</th>
+                                    <th className="border-0 py-3 ps-4 fw-semibold">
+                                        <i className="bi bi-upc-scan me-2"></i>Código
+                                    </th>
+                                    <th className="border-0 py-3 fw-semibold">
+                                        <i className="bi bi-box-seam me-2"></i>Producto
+                                    </th>
+                                    <th className="border-0 py-3 fw-semibold">
+                                        <i className="bi bi-boxes me-2"></i>Stock Actual
+                                    </th>
+                                    <th className="border-0 py-3 fw-semibold">
+                                        <i className="bi bi-currency-dollar me-2"></i>Precios
+                                    </th>
+                                    <th className="border-0 py-3 fw-semibold">
+                                        <i className="bi bi-shield-check me-2"></i>Estado Stock
+                                    </th>
+                                    <th className="border-0 py-3 fw-semibold text-center">
+                                        <i className="bi bi-gear me-2"></i>Acciones
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -319,17 +397,22 @@ export default function Almacen() {
                                         }
 
                                         return (
-                                            <tr key={producto.id} className={stock === 0 ? 'table-danger' : stock <= stockMinimo ? 'table-warning' : ''}>
-                                                <td>
-                                                    <code className="bg-light px-2 py-1 rounded">
+                                            <tr key={producto.id} className="align-middle" style={{
+                                                backgroundColor: stock === 0 ? 'rgba(220, 53, 69, 0.1)' : 
+                                                               stock <= stockMinimo ? 'rgba(255, 193, 7, 0.1)' : ''
+                                            }}>
+                                                <td className="py-3 ps-4">
+                                                    <code className="bg-light p-2 rounded text-primary fw-bold">
                                                         {producto.codigo}
                                                     </code>
                                                 </td>
-                                                <td>
+                                                <td className="py-3">
                                                     <div className="d-flex align-items-center">
-                                                        <i className="bi bi-box-seam me-2 text-primary"></i>
+                                                        <div className="rounded-circle bg-primary bg-opacity-10 p-2 me-3">
+                                                            <i className="bi bi-box-seam text-primary"></i>
+                                                        </div>
                                                         <div>
-                                                            <div className="fw-bold">{producto.descripcion}</div>
+                                                            <div className="fw-semibold">{producto.descripcion}</div>
                                                             {producto.estado ? (
                                                                 <small className="text-success">
                                                                     <i className="bi bi-check-circle me-1"></i>Activo
@@ -342,36 +425,46 @@ export default function Almacen() {
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td>
+                                                <td className="py-3">
                                                     <div className="d-flex align-items-center">
-                                                        <span className={`badge bg-${colorStock} me-2`}>
+                                                        <span className={`badge bg-${colorStock} fs-6 px-3 py-2 me-2`}>
                                                             {stock.toLocaleString()}
                                                         </span>
-                                                        <small className="text-muted">unidades</small>
+                                                        <small className="text-muted fw-semibold">unidades</small>
                                                     </div>
                                                 </td>
-                                                <td>
+                                                <td className="py-3">
                                                     <div className="small">
-                                                        <div><strong>General:</strong> ${(producto.pre_general || 0).toLocaleString()}</div>
-                                                        <div><strong>Especial:</strong> ${(producto.pre_especial || 0).toLocaleString()}</div>
-                                                        <div><strong>Mayor:</strong> ${(producto.pre_por_mayor || 0).toLocaleString()}</div>
+                                                        <div className="mb-1">
+                                                            <span className="text-success fw-bold">General:</span> 
+                                                            <span className="ms-2">S/ {(producto.pre_general || 0).toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="mb-1">
+                                                            <span className="text-warning fw-bold">Especial:</span> 
+                                                            <span className="ms-2">S/ {(producto.pre_especial || 0).toLocaleString()}</span>
+                                                        </div>
+                                                        <div>
+                                                            <span className="text-info fw-bold">Mayor:</span> 
+                                                            <span className="ms-2">S/ {(producto.pre_por_mayor || 0).toLocaleString()}</span>
+                                                        </div>
                                                     </div>
                                                 </td>
-                                                <td>
-                                                    <span className={`badge bg-${colorStock} d-flex align-items-center justify-content-center`} style={{width: '80px'}}>
+                                                <td className="py-3">
+                                                    <span className={`badge bg-${colorStock} d-flex align-items-center justify-content-center fs-6 px-3 py-2`} style={{width: '90px'}}>
                                                         <i className={`bi bi-${iconoStock} me-1`}></i>
                                                         {estadoStock === 'normal' ? 'Normal' : 
                                                          estadoStock === 'bajo' ? 'Bajo' : 'Agotado'}
                                                     </span>
                                                 </td>
-                                                <td>
+                                                <td className="py-3 text-center">
                                                     <button
-                                                        className="btn btn-outline-success btn-sm"
+                                                        className="btn btn-outline-success btn-sm rounded-pill shadow-sm"
                                                         onClick={() => handleAgregarStock(producto)}
                                                         title="Agregar stock"
+                                                        disabled={loading}
                                                     >
                                                         <i className="bi bi-plus-circle me-1"></i>
-                                                        Stock
+                                                        Agregar Stock
                                                     </button>
                                                 </td>
                                             </tr>
@@ -464,6 +557,7 @@ export default function Almacen() {
                     </div>
                 </div>
             )}
+            </div>
         </div>
     );
 }

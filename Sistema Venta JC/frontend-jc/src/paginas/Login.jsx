@@ -90,7 +90,17 @@ export default function Login() {
             const errorMessage = error.message || 'Error al iniciar sesion';
             
             // Manejar errores específicos
-            if (errorMessage.toLowerCase().includes('usuario') || 
+            if (errorMessage.toLowerCase().includes('desactivad') || 
+                errorMessage.toLowerCase().includes('inactiv') ||
+                errorMessage.toLowerCase().includes('deshabilitad') ||
+                errorMessage.toLowerCase().includes('bloquead') ||
+                errorMessage.toLowerCase().includes('contacta al administrador')) {
+                
+                // Usuario desactivado - mostrar mensaje específico sin marcar campos como error
+                setError('🔒 Tu cuenta ha sido desactivada. Contacta al administrador para reactivarla.');
+                setFieldState({ usuario: 'normal', contrasena: 'normal' });
+                
+            } else if (errorMessage.toLowerCase().includes('usuario') || 
                 errorMessage.toLowerCase().includes('user') ||
                 errorMessage.toLowerCase().includes('no encontrado') ||
                 errorMessage.toLowerCase().includes('not found')) {
@@ -98,6 +108,7 @@ export default function Login() {
                 // Usuario incorrecto - limpiar contraseña y marcar usuario como error
                 setCredentials(prev => ({ ...prev, contrasena: '' }));
                 setFieldState({ usuario: 'error', contrasena: 'normal' });
+                setError('Usuario no encontrado');
                 
             } else if (errorMessage.toLowerCase().includes('contraseña') || 
                        errorMessage.toLowerCase().includes('password') ||
@@ -105,6 +116,7 @@ export default function Login() {
                 
                 // Contraseña incorrecta - marcar solo contraseña como error
                 setFieldState({ usuario: 'normal', contrasena: 'error' });
+                setError('Contraseña incorrecta');
                 
             } else {
                 // Error general
@@ -172,8 +184,31 @@ export default function Login() {
                     
                     <form onSubmit={handleSubmit}>
                         {error && (
-                            <div className="alert alert-danger" role="alert">
-                                {error}
+                            <div 
+                                className="alert d-flex align-items-center" 
+                                role="alert"
+                                style={{
+                                    background: error.includes('desactivada') || error.includes('❌') 
+                                        ? 'linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%)' 
+                                        : '#f8d7da',
+                                    border: error.includes('desactivada') || error.includes('❌') 
+                                        ? '1px solid #ff6b6b' 
+                                        : '1px solid #f5c6cb',
+                                    borderRadius: '12px',
+                                    color: error.includes('desactivada') || error.includes('❌') 
+                                        ? 'white' 
+                                        : '#721c24',
+                                    fontSize: '0.95rem',
+                                    fontWeight: '500',
+                                    boxShadow: error.includes('desactivada') || error.includes('❌') 
+                                        ? '0 4px 15px rgba(255, 107, 107, 0.3)' 
+                                        : 'none'
+                                }}
+                            >
+                                {error.includes('desactivada') || error.includes('❌') && (
+                                    <i className="bi bi-shield-exclamation me-2" style={{ fontSize: '1.2rem' }}></i>
+                                )}
+                                <span>{error}</span>
                             </div>
                         )}
                         <div className="mb-3">

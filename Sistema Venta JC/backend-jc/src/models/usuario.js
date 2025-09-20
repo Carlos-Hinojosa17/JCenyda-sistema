@@ -11,7 +11,7 @@ const hashPassword = async (password) => {
 const getAllUsuarios = async () => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .select('id, nombre, usuario, tipo');
+    .select('id, nombre, usuario, tipo, estado');
 
   if (error) {
     throw new Error('Error al obtener los usuarios');
@@ -22,7 +22,7 @@ const getAllUsuarios = async () => {
 const getUsuarioById = async (id) => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
-    .select('id, nombre, usuario, tipo')
+    .select('id, nombre, usuario, tipo, estado')
     .eq('id', id)
     .single();
 
@@ -71,7 +71,7 @@ const createUsuario = async (usuarioData) => {
   const { data, error } = await supabase
     .from(TABLE_NAME)
     .insert([{ nombre, usuario, contrasena: contrasenaEncriptada, tipo }])
-    .select('id, nombre, usuario, tipo')
+    .select('id, nombre, usuario, tipo, estado')
     .single();
 
   if (error) {
@@ -117,7 +117,7 @@ const updateUsuario = async (id, updates) => {
     .from(TABLE_NAME)
     .update(dataToUpdate)
     .eq('id', id)
-    .select('id, nombre, usuario, tipo')
+    .select('id, nombre, usuario, tipo, estado')
     .single();
 
   if (error) {
@@ -131,7 +131,7 @@ const deleteUsuario = async (id) => {
     .from(TABLE_NAME)
     .delete()
     .eq('id', id)
-    .select('id, nombre, usuario, tipo')
+    .select('id, nombre, usuario, tipo, estado')
     .single();
 
   if (error) {
@@ -143,6 +143,28 @@ const deleteUsuario = async (id) => {
   return data;
 };
 
+// Nueva función para cambiar estado del usuario
+const toggleUserStatus = async (id, estado) => {
+  // Verificar que el usuario existe
+  const usuarioExistente = await getUsuarioById(id);
+  if (!usuarioExistente) {
+    throw new Error(`No se encontró un usuario con el ID ${id}.`);
+  }
+
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .update({ estado })
+    .eq('id', id)
+    .select('id, nombre, usuario, tipo, estado')
+    .single();
+
+  if (error) {
+    throw new Error('Error al actualizar el estado del usuario');
+  }
+  
+  return data;
+};
+
 module.exports = {
   getAllUsuarios,
   getUsuarioById,
@@ -150,4 +172,5 @@ module.exports = {
   createUsuario,
   updateUsuario,
   deleteUsuario,
+  toggleUserStatus, // Exportar nueva función
 };

@@ -155,6 +155,41 @@ export const authService = {
         throw new Error('Error de conexión al eliminar usuario');
       }
     }
+  },
+
+  // Cambiar estado del usuario (activar/desactivar)
+  toggleUserStatus: async (id, estado) => {
+    try {
+      console.log('🔄 Cambiando estado del usuario ID:', id, 'a estado:', estado);
+      console.log('🎯 Endpoint a llamar:', `/users/${id}/status`);
+      console.log('🎯 Método: PATCH');
+      console.log('🎯 Payload:', { estado });
+      
+      // Intentar con axios directo para debuggear
+      const axios = await import('axios');
+      const token = localStorage.getItem('token');
+      
+      const response = await axios.default({
+        method: 'PATCH',
+        url: `http://localhost:5000/api/users/${id}/status`,
+        data: { estado },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      console.log('✅ Estado del usuario actualizado:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('❌ Error al cambiar estado del usuario:', error.response?.data || error.message);
+      console.error('❌ Error completo:', error);
+      if (error.response) {
+        throw new Error(error.response.data?.message || 'Error al cambiar estado del usuario');
+      } else {
+        throw new Error('Error de conexión al cambiar estado del usuario');
+      }
+    }
   }
 };
 

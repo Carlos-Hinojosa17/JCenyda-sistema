@@ -77,10 +77,43 @@ const deleteUsuario = async (req, res, next) => {
   }
 };
 
+// Nueva función para cambiar estado del usuario
+const toggleUserStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { estado } = req.body;
+    
+    // Validar que el estado sea un boolean
+    if (typeof estado !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'El campo estado debe ser un valor booleano (true/false)'
+      });
+    }
+    
+    const usuarioActualizado = await usuarioModel.toggleUserStatus(id, estado);
+    
+    res.json({
+      success: true,
+      message: `Usuario ${estado ? 'activado' : 'desactivado'} correctamente`,
+      data: usuarioActualizado
+    });
+  } catch (error) {
+    if (error.message.includes('No se encontró un usuario')) {
+      return res.status(404).json({ 
+        success: false, 
+        message: error.message 
+      });
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   getUsuarios,
   getUsuario,
   createUsuario,
   updateUsuario,
   deleteUsuario,
+  toggleUserStatus, // Exportar nueva función
 };

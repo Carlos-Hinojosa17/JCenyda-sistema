@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { quotationService, productService } from '../services/apiServices';
+import { quotationService } from '../services/apiServices';
 
 function Cotizaciones() {
     const navigate = useNavigate();
@@ -142,51 +142,11 @@ function Cotizaciones() {
     const [editingCotizacionId, setEditingCotizacionId] = useState(null);
     const [savingEdit, setSavingEdit] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
-    const [productSearchResults, setProductSearchResults] = useState({});
-    const [productSearchLoading, setProductSearchLoading] = useState({});
-
-    // Simple debounce helper
-    const debounce = (fn, delay = 300) => {
-        let timer;
-        return (...args) => {
-            clearTimeout(timer);
-            timer = setTimeout(() => fn(...args), delay);
-        };
-    };
-
-    const searchProductForRow = debounce(async (query, rowIndex) => {
-        if (!query || query.trim().length < 1) {
-            setProductSearchResults(prev => ({ ...prev, [rowIndex]: [] }));
-            return;
-        }
-        try {
-            setProductSearchLoading(prev => ({ ...prev, [rowIndex]: true }));
-            const results = await productService.search(query);
-            setProductSearchResults(prev => ({ ...prev, [rowIndex]: results }));
-        } catch (error) {
-            console.error('Error buscando productos:', error);
-            setProductSearchResults(prev => ({ ...prev, [rowIndex]: [] }));
-        } finally {
-            setProductSearchLoading(prev => ({ ...prev, [rowIndex]: false }));
-        }
-    }, 300);
-
-    const selectProductForRow = (rowIndex, product) => {
-        const copy = [...editingItems];
-        copy[rowIndex] = {
-            ...copy[rowIndex],
-            producto_id: product.id,
-            producto_nombre: product.descripcion || product.nombre || '',
-            producto_codigo: product.codigo || product.producto_codigo || '',
-            precio_unitario: Number(product.pre_general || product.precio_unitario || 0),
-            cantidad: copy[rowIndex].cantidad || 1,
-        };
-        copy[rowIndex].subtotal = Number(copy[rowIndex].cantidad || 0) * Number(copy[rowIndex].precio_unitario || 0);
-        setEditingItems(copy);
-        recalcEditingTotals(copy);
-        // Limpiar resultados para ese row
-        setProductSearchResults(prev => ({ ...prev, [rowIndex]: [] }));
-    };
+    const [estadoFilter, setEstadoFilter] = useState('todos'); // Nuevo estado para filtros
+    
+    // Estados para paginación
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
 
     const openEditor = async (cotizacion) => {
         try {
@@ -439,11 +399,29 @@ function Cotizaciones() {
         };
     };
 
-    const filteredCotizaciones = cotizaciones.filter(cot => 
-        cot.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        cot.id?.toString().includes(searchTerm) ||
-        cot.total?.toString().includes(searchTerm)
-    );
+    const filteredCotizaciones = cotizaciones.filter(cot => {
+        const matchesSearch = cot.cliente_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            cot.id?.toString().includes(searchTerm) ||
+            cot.total?.toString().includes(searchTerm);
+        
+        const matchesEstado = estadoFilter === 'todos' || 
+            (estadoFilter === 'pendiente' && cot.estado === 'pendiente') ||
+            (estadoFilter === 'completada' && cot.estado === 'completada') ||
+            (estadoFilter === 'cancelada' && cot.estado === 'cancelada');
+        
+        return matchesSearch && matchesEstado;
+    });
+
+    // Lógica de paginación
+    const totalPages = Math.ceil(filteredCotizaciones.length / itemsPerPage);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const currentCotizaciones = filteredCotizaciones.slice(startIndex, endIndex);
+
+    // Reiniciar página cuando cambien los filtros
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, estadoFilter]);
 
     const formatDate = (dateString) => {
         try {
@@ -473,537 +451,1456 @@ function Cotizaciones() {
     }
 
     return (
-        <div className="container-fluid p-4">
-            <div className="d-flex justify-content-between align-items-center mb-4">
-                <h2>
-                    <i className="bi bi-file-text me-2"></i>
-                    Cotizaciones Guardadas
-                </h2>
-                <button 
-                    className="btn btn-outline-primary"
-                    onClick={loadCotizaciones}
+        <>
+            {/* Estilos CSS para animaciones */}
+            <style>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                
+                @keyframes slideInLeft {
+                    from { transform: translateX(-30px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                
+                @keyframes bounceIn {
+                    0% { transform: scale(0.3); opacity: 0; }
+                    50% { transform: scale(1.05); }
+                    70% { transform: scale(0.9); }
+                    100% { transform: scale(1); opacity: 1; }
+                }
+                
+                @keyframes pulse {
+                    0%, 100% { transform: scale(1); }
+                    50% { transform: scale(1.05); }
+                }
+                
+                .fade-in { animation: fadeIn 0.6s ease-out; }
+                .slide-in-left { animation: slideInLeft 0.5s ease-out; }
+                .bounce-in { animation: bounceIn 0.8s ease-out; }
+                .pulse { animation: pulse 2s infinite; }
+                
+                .pulse-hover:hover { animation: pulse 0.6s ease-in-out; }
+                
+                .table-row-hover { animation: slideInLeft 0.5s ease-out; }
+                
+                .glass-card {
+                    background: rgba(255, 255, 255, 0.25);
+                    backdrop-filter: blur(20px);
+                    border: 1px solid rgba(255, 255, 255, 0.2);
+                }
+                
+                .table {
+                    border-collapse: separate;
+                    border-spacing: 0;
+                }
+                
+                .table th,
+                .table td {
+                    vertical-align: middle !important;
+                    border: none !important;
+                }
+            `}</style>
+            
+            <div 
+                className="d-flex flex-column min-vh-100"
+                style={{
+                    fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)',
+                    width: '100%',
+                    overflow: 'hidden'
+                }}
+        >
+            {/* CSS for animations */}
+            <style>
+                {`
+                    @keyframes fadeIn {
+                        from { opacity: 0; transform: translateY(20px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                    @keyframes slideInLeft {
+                        from { opacity: 0; transform: translateX(-30px); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                    @keyframes bounceIn {
+                        0% { transform: scale(0.9); opacity: 0; }
+                        50% { transform: scale(1.05); opacity: 0.7; }
+                        100% { transform: scale(1); opacity: 1; }
+                    }
+                    @keyframes pulse {
+                        0%, 100% { transform: scale(1); }
+                        50% { transform: scale(1.05); }
+                    }
+                    .fade-in { animation: fadeIn 0.6s ease-out; }
+                    .slide-in-left { animation: slideInLeft 0.5s ease-out; }
+                    .bounce-in { animation: bounceIn 0.7s ease-out; }
+                    .pulse-hover:hover { animation: pulse 1s infinite; }
+                    .table-row-hover {
+                        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                    }
+                    .table-row-hover:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 8px 25px rgba(111, 66, 193, 0.15);
+                    }
+                    .glass-card {
+                        backdrop-filter: blur(20px);
+                        background: rgba(255, 255, 255, 0.95);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        transition: all 0.3s ease;
+                    }
+                    .glass-card:hover {
+                        background: rgba(255, 255, 255, 0.98);
+                        transform: translateY(-5px);
+                        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+                    }
+                `}
+            </style>
+
+            {/* Header Section Mejorado */}
+            <div 
+                className='p-4 p-md-5'
+                style={{
+                    background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 50%, #4a2c7e 100%)',
+                    color: 'white',
+                    borderBottom: '3px solid rgba(240, 152, 54, 0.8)',
+                    boxShadow: '0 8px 32px rgba(111, 66, 193, 0.2)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                }}
+            >
+                {/* Decorative background pattern */}
+                <div 
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        width: '300px',
+                        height: '100%',
+                        background: 'linear-gradient(45deg, rgba(240, 152, 54, 0.1) 0%, rgba(240, 152, 54, 0.05) 100%)',
+                        borderRadius: '50px 0 0 50px',
+                        zIndex: 0
+                    }}
+                />
+                
+                <div className='d-flex justify-content-between align-items-center position-relative' style={{ zIndex: 1 }}>
+                    <div>
+                        <div className='d-flex align-items-center mb-3'>
+                            <div 
+                                className='me-3 d-flex align-items-center justify-content-center'
+                                style={{
+                                    width: '60px',
+                                    height: '60px',
+                                    background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
+                                    borderRadius: '16px',
+                                    boxShadow: '0 8px 20px rgba(240, 152, 54, 0.3)'
+                                }}
+                            >
+                                <i className='bi bi-file-text' style={{ fontSize: '2rem', color: 'white' }}></i>
+                            </div>
+                            <div>
+                                <h1 
+                                    className='mb-0 fw-bold'
+                                    style={{
+                                        fontSize: 'clamp(1.8rem, 4vw, 2.5rem)',
+                                        letterSpacing: '-0.5px',
+                                        textShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                                    }}
+                                >
+                                    Cotizaciones
+                                </h1>
+                                <p className='mb-0 opacity-75 mt-1' style={{ fontSize: '1.1rem' }}>
+                                    Gestión de cotizaciones guardadas
+                                </p>
+                            </div>
+                        </div>
+                        
+                        <div className='d-flex align-items-center gap-3'>
+                            <span 
+                                className='badge px-3 py-2'
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.2)',
+                                    color: 'white',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '500',
+                                    borderRadius: '12px',
+                                    backdropFilter: 'blur(10px)'
+                                }}
+                            >
+                                <i className='bi bi-list-ul me-2'></i>
+                                Total: {cotizaciones.length} cotizaciones
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div className='d-flex align-items-center gap-3'>
+                        {/* Botón de actualizar mejorado */}
+                        <button 
+                            className='btn d-flex align-items-center gap-2' 
+                            onClick={loadCotizaciones}
+                            disabled={loading}
+                            style={{
+                                background: 'rgba(255, 255, 255, 0.15)',
+                                color: 'white',
+                                border: '1px solid rgba(255, 255, 255, 0.3)',
+                                borderRadius: '12px',
+                                fontWeight: '500',
+                                backdropFilter: 'blur(10px)',
+                                transition: 'all 0.3s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                                e.target.style.background = 'rgba(255, 255, 255, 0.25)';
+                                e.target.style.transform = 'translateY(-1px)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.background = 'rgba(255, 255, 255, 0.15)';
+                                e.target.style.transform = 'translateY(0)';
+                            }}
+                        >
+                            {loading ? (
+                                <span className='spinner-border spinner-border-sm'></span>
+                            ) : (
+                                <i className='bi bi-arrow-clockwise'></i>
+                            )}
+                            <span>Actualizar</span>
+                        </button>
+                        
+                        {/* Botón Nueva Cotización */}
+                        <button 
+                            className='btn d-flex align-items-center gap-2'
+                            style={{
+                                background: 'linear-gradient(135deg, #F09836 0%, #D67E1A 100%)',
+                                border: 'none',
+                                borderRadius: '12px',
+                                color: 'white',
+                                fontWeight: '600',
+                                boxShadow: '0 6px 20px rgba(240, 152, 54, 0.4)',
+                                transition: 'all 0.3s ease',
+                                padding: '8px 16px'
+                            }}
+                            onClick={() => navigate('/layouts/cotizacion')}
+                            onMouseEnter={(e) => {
+                                e.target.style.transform = 'translateY(-2px)';
+                                e.target.style.boxShadow = '0 8px 25px rgba(240, 152, 54, 0.5)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.transform = 'translateY(0)';
+                                e.target.style.boxShadow = '0 6px 20px rgba(240, 152, 54, 0.4)';
+                            }}
+                        >
+                            <i className='bi bi-plus-circle'></i>
+                            <span>Nueva Cotización</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Contenido principal con glassmorphism mejorado */}
+            <div className="flex-grow-1 p-4 p-md-5">
+                <div 
+                    className="glass-card fade-in"
+                    style={{
+                        borderRadius: '24px',
+                        boxShadow: '0 25px 50px rgba(0, 0, 0, 0.1)',
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}
                 >
-                    <i className="bi bi-arrow-clockwise me-2"></i>
-                    Actualizar
-                </button>
-            </div>
+                    {/* Patrón decorativo interno */}
+                    <div 
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '4px',
+                            background: 'linear-gradient(90deg, #6f42c1 0%, #F09836 50%, #17a2b8 100%)'
+                        }}
+                    />
+                    
+                    {error && (
+                        <div 
+                            className="alert alert-danger m-4 bounce-in" 
+                            style={{
+                                borderRadius: '16px',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, rgba(220, 53, 69, 0.1) 0%, rgba(220, 53, 69, 0.05) 100%)',
+                                backdropFilter: 'blur(10px)',
+                                borderLeft: '4px solid #dc3545'
+                            }}
+                            role="alert"
+                        >
+                            <i className="bi bi-exclamation-triangle me-2"></i>
+                            {error}
+                        </div>
+                    )}
 
-            {error && (
-                <div className="alert alert-danger" role="alert">
-                    <i className="bi bi-exclamation-triangle me-2"></i>
-                    {error}
-                </div>
-            )}
-
-            {/* Barra de búsqueda */}
-            <div className="row mb-4">
-                <div className="col-md-6">
-                    <div className="input-group">
-                        <span className="input-group-text">
-                            <i className="bi bi-search"></i>
-                        </span>
-                        <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Buscar por cliente, ID o total..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                    {/* Barra de búsqueda ultra-moderna */}
+                    <div 
+                        className="p-4 border-bottom slide-in-left"
+                        style={{
+                            background: 'linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(240, 152, 54, 0.04) 100%)',
+                            borderBottom: '1px solid rgba(111, 66, 193, 0.1)'
+                        }}
+                    >
+                        <div className="row align-items-center">
+                            <div className="col-md-8">
+                                <div 
+                                    className="input-group"
+                                    style={{
+                                        boxShadow: '0 8px 25px rgba(0, 0, 0, 0.08)',
+                                        borderRadius: '16px',
+                                        overflow: 'hidden',
+                                        transition: 'all 0.3s ease'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(-2px)';
+                                        e.currentTarget.style.boxShadow = '0 12px 35px rgba(0, 0, 0, 0.12)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                        e.currentTarget.style.boxShadow = '0 8px 25px rgba(0, 0, 0, 0.08)';
+                                    }}
+                                >
+                                    <span 
+                                        className="input-group-text"
+                                        style={{
+                                            background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)',
+                                            color: 'white',
+                                            border: 'none',
+                                            padding: '14px 18px'
+                                        }}
+                                    >
+                                        <i className="bi bi-search" style={{ fontSize: '1.1rem' }}></i>
+                                    </span>
+                                    <input
+                                        type="text"
+                                        className="form-control"
+                                        placeholder="🔍 Buscar por cliente, ID o total..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        style={{
+                                            border: 'none',
+                                            fontSize: '1.05rem',
+                                            padding: '14px 20px',
+                                            background: 'rgba(255, 255, 255, 0.98)'
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            <div className="col-md-4">
+                                <div className="d-flex align-items-center justify-content-md-end mt-3 mt-md-0">
+                                    <span 
+                                        className="badge px-4 py-3 pulse-hover"
+                                        style={{
+                                            background: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)',
+                                            color: 'white',
+                                            fontSize: '0.95rem',
+                                            borderRadius: '12px',
+                                            boxShadow: '0 4px 15px rgba(23, 162, 184, 0.3)',
+                                            fontWeight: '600'
+                                        }}
+                                    >
+                                        <i className="bi bi-funnel me-2"></i>
+                                        Mostrando {currentCotizaciones.length} de {filteredCotizaciones.length} ({cotizaciones.length} total)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Filtros por estado */}
+                        <div className="row mt-4">
+                            <div className="col-12">
+                                <div className="d-flex flex-wrap gap-3 align-items-center">
+                                    <span style={{ 
+                                        fontSize: '0.9rem', 
+                                        fontWeight: '600', 
+                                        color: '#6f42c1',
+                                        marginRight: '10px'
+                                    }}>
+                                        <i className="bi bi-funnel me-2"></i>Filtrar por estado:
+                                    </span>
+                                    
+                                    <button
+                                        className={`btn btn-sm ${estadoFilter === 'todos' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                        onClick={() => setEstadoFilter('todos')}
+                                        style={{
+                                            borderRadius: '20px',
+                                            fontWeight: '600',
+                                            fontSize: '0.8rem',
+                                            padding: '6px 16px',
+                                            transition: 'all 0.3s ease',
+                                            background: estadoFilter === 'todos' 
+                                                ? 'linear-gradient(135deg, #6f42c1, #8e44ad)' 
+                                                : 'transparent',
+                                            borderColor: '#6f42c1'
+                                        }}
+                                    >
+                                        <i className="bi bi-list me-1"></i>Todos
+                                    </button>
+                                    
+                                    <button
+                                        className={`btn btn-sm ${estadoFilter === 'pendiente' ? 'btn-warning' : 'btn-outline-warning'}`}
+                                        onClick={() => setEstadoFilter('pendiente')}
+                                        style={{
+                                            borderRadius: '20px',
+                                            fontWeight: '600',
+                                            fontSize: '0.8rem',
+                                            padding: '6px 16px',
+                                            transition: 'all 0.3s ease',
+                                            background: estadoFilter === 'pendiente' 
+                                                ? 'linear-gradient(135deg, #f39c12, #e67e22)' 
+                                                : 'transparent',
+                                            borderColor: '#f39c12'
+                                        }}
+                                    >
+                                        <i className="bi bi-clock me-1"></i>Pendientes
+                                    </button>
+                                    
+                                    <button
+                                        className={`btn btn-sm ${estadoFilter === 'completada' ? 'btn-success' : 'btn-outline-success'}`}
+                                        onClick={() => setEstadoFilter('completada')}
+                                        style={{
+                                            borderRadius: '20px',
+                                            fontWeight: '600',
+                                            fontSize: '0.8rem',
+                                            padding: '6px 16px',
+                                            transition: 'all 0.3s ease',
+                                            background: estadoFilter === 'completada' 
+                                                ? 'linear-gradient(135deg, #27ae60, #2ecc71)' 
+                                                : 'transparent',
+                                            borderColor: '#27ae60'
+                                        }}
+                                    >
+                                        <i className="bi bi-check-circle me-1"></i>Completadas
+                                    </button>
+                                    
+                                    <button
+                                        className={`btn btn-sm ${estadoFilter === 'cancelada' ? 'btn-danger' : 'btn-outline-danger'}`}
+                                        onClick={() => setEstadoFilter('cancelada')}
+                                        style={{
+                                            borderRadius: '20px',
+                                            fontWeight: '600',
+                                            fontSize: '0.8rem',
+                                            padding: '6px 16px',
+                                            transition: 'all 0.3s ease',
+                                            background: estadoFilter === 'cancelada' 
+                                                ? 'linear-gradient(135deg, #e74c3c, #c0392b)' 
+                                                : 'transparent',
+                                            borderColor: '#e74c3c'
+                                        }}
+                                    >
+                                        <i className="bi bi-x-circle me-1"></i>Canceladas
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div className="col-md-6">
-                    <div className="d-flex align-items-center">
-                        <span className="me-2">
-                            <i className="bi bi-info-circle text-info"></i>
-                        </span>
-                        <small className="text-muted">
-                            Total de cotizaciones: {filteredCotizaciones.length}
-                        </small>
-                    </div>
-                </div>
-            </div>
 
-            {/* Tabla de cotizaciones */}
-            <div className="table-responsive">
-                <table className="table table-striped table-hover">
-                    <thead className="table-dark">
-                        <tr>
-                            <th>ID</th>
-                            <th>Fecha</th>
-                            <th>Cliente</th>
-                            <th>Items</th>
-                            <th>Total</th>
-                            <th>Método Pago</th>
-                            <th>Estado</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {filteredCotizaciones.length === 0 ? (
-                            <tr>
-                                <td colSpan="8" className="text-center py-4">
-                                    <div className="text-muted">
-                                        <i className="bi bi-inbox display-4 d-block mb-2"></i>
-                                        {searchTerm ? 'No se encontraron cotizaciones que coincidan con la búsqueda' : 'No hay cotizaciones guardadas'}
-                                    </div>
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredCotizaciones.map((cotizacion) => (
-                                <tr key={cotizacion.id}>
-                                    <td>
-                                        <span className="badge bg-info">
-                                            COT-{cotizacion.id}
-                                        </span>
-                                    </td>
-                                    <td>{formatDate(cotizacion.fecha_creacion)}</td>
-                                    <td>
-                                        <div>
-                                            <strong>{cotizacion.cliente_nombre || 'Cliente no especificado'}</strong>
-                                            {cotizacion.cliente_documento && (
-                                                <div className="text-muted small">
-                                                    {cotizacion.cliente_documento}
+                    {/* Tabla de cotizaciones ultra-moderna */}
+                    <div className="p-4">
+                        <div 
+                            className="table-responsive bounce-in"
+                            style={{
+                                borderRadius: '20px',
+                                overflow: 'hidden',
+                                boxShadow: '0 12px 30px rgba(0, 0, 0, 0.1)',
+                                border: '1px solid rgba(111, 66, 193, 0.08)',
+                                maxHeight: '70vh',
+                                overflowY: 'auto'
+                            }}
+                        >
+                            <table className="table table-hover mb-0" style={{ tableLayout: 'fixed', width: '100%' }}>
+                                <thead 
+                                    style={{
+                                        background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)',
+                                        color: 'white',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 10
+                                    }}
+                                >
+                                    {/* Efecto brillante en el header */}
+                                    <tr style={{ position: 'relative' }}>
+                                        <div 
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                right: 0,
+                                                height: '2px',
+                                                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+                                                animation: 'slideInLeft 1s ease-out'
+                                            }}
+                                        />
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '10%',
+                                            textAlign: 'center'
+                                        }}>
+                                            <i className="bi bi-upc me-1"></i>Código
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '12%',
+                                            textAlign: 'center'
+                                        }}>
+                                            <i className="bi bi-calendar me-1"></i>Fecha
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '20%'
+                                        }}>
+                                            <i className="bi bi-person me-1"></i>Cliente
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '10%',
+                                            textAlign: 'center'
+                                        }}>
+                                            <i className="bi bi-box me-1"></i>Items
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '12%',
+                                            textAlign: 'right'
+                                        }}>
+                                            <i className="bi bi-currency-dollar me-1"></i>Total
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '12%',
+                                            textAlign: 'center'
+                                        }}>
+                                            <i className="bi bi-credit-card me-1"></i>Pago
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '12%',
+                                            textAlign: 'center'
+                                        }}>
+                                            <i className="bi bi-flag me-1"></i>Estado
+                                        </th>
+                                        <th style={{ 
+                                            padding: '16px 12px', 
+                                            fontWeight: '700', 
+                                            fontSize: '0.85rem', 
+                                            border: 'none', 
+                                            textShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                                            width: '12%',
+                                            textAlign: 'center'
+                                        }}>
+                                            <i className="bi bi-gear me-1"></i>Acciones
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody style={{ background: 'white' }}>
+                                    {currentCotizaciones.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="8" className="text-center py-5" style={{ border: 'none' }}>
+                                                <div 
+                                                    className="d-flex flex-column align-items-center fade-in"
+                                                    style={{ color: '#6c757d' }}
+                                                >
+                                                    <i className="bi bi-inbox pulse" style={{ fontSize: '4rem', opacity: 0.3, marginBottom: '1rem', color: '#6f42c1' }}></i>
+                                                    <h5 className="mb-2" style={{ color: '#6f42c1', fontWeight: '600' }}>No hay cotizaciones</h5>
+                                                    <p className="mb-0" style={{ fontSize: '0.9rem' }}>
+                                                        {searchTerm ? 'No se encontraron cotizaciones que coincidan con la búsqueda' : 'No hay cotizaciones guardadas aún'}
+                                                    </p>
                                                 </div>
-                                            )}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        currentCotizaciones.map((cotizacion, index) => (
+                                            <tr 
+                                                key={cotizacion.id}
+                                                style={{
+                                                    animationDelay: `${index * 0.1}s`,
+                                                    borderBottom: '1px solid rgba(111, 66, 193, 0.06)'
+                                                }}
+                                            >
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.8rem', 
+                                                    fontWeight: '600',
+                                                    color: '#6f42c1',
+                                                    border: 'none',
+                                                    textAlign: 'center',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <span 
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, #6f42c1, #8e44ad)',
+                                                            color: 'white',
+                                                            padding: '4px 8px',
+                                                            borderRadius: '10px',
+                                                            fontSize: '0.75rem',
+                                                            fontWeight: '700',
+                                                            boxShadow: '0 2px 6px rgba(111, 66, 193, 0.2)',
+                                                            display: 'inline-block'
+                                                        }}
+                                                    >
+                                                        COT-{cotizacion.id}
+                                                    </span>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.8rem',
+                                                    color: '#495057',
+                                                    border: 'none',
+                                                    fontWeight: '500',
+                                                    textAlign: 'center',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <i className="bi bi-calendar-date mb-1" style={{ color: '#6f42c1', fontSize: '0.9rem' }}></i>
+                                                        <span style={{ fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                                                            {formatDate(cotizacion.fecha_creacion)}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.8rem',
+                                                    color: '#495057',
+                                                    border: 'none',
+                                                    fontWeight: '500',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                                        <div 
+                                                            style={{
+                                                                width: '28px',
+                                                                height: '28px',
+                                                                borderRadius: '50%',
+                                                                background: 'linear-gradient(135deg, #F09836, #e67e22)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                marginRight: '8px',
+                                                                color: 'white',
+                                                                fontWeight: '700',
+                                                                fontSize: '0.7rem',
+                                                                boxShadow: '0 2px 6px rgba(240, 152, 54, 0.2)',
+                                                                flexShrink: 0
+                                                            }}
+                                                        >
+                                                            {(cotizacion.cliente_nombre || 'C').charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div style={{ overflow: 'hidden' }}>
+                                                            <div style={{ 
+                                                                color: '#2c3e50', 
+                                                                fontSize: '0.8rem', 
+                                                                fontWeight: '600',
+                                                                whiteSpace: 'nowrap',
+                                                                overflow: 'hidden',
+                                                                textOverflow: 'ellipsis'
+                                                            }}>
+                                                                {cotizacion.cliente_nombre || 'Cliente no especificado'}
+                                                            </div>
+                                                            {cotizacion.cliente_documento && (
+                                                                <div style={{ 
+                                                                    color: '#6c757d', 
+                                                                    fontSize: '0.7rem', 
+                                                                    marginTop: '1px',
+                                                                    whiteSpace: 'nowrap',
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis'
+                                                                }}>
+                                                                    <i className="bi bi-card-text me-1"></i>
+                                                                    {cotizacion.cliente_documento}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.8rem',
+                                                    color: '#495057',
+                                                    border: 'none',
+                                                    fontWeight: '500',
+                                                    textAlign: 'center',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <span 
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, rgba(111, 66, 193, 0.1), rgba(240, 152, 54, 0.1))',
+                                                            color: '#6f42c1',
+                                                            padding: '4px 8px',
+                                                            borderRadius: '15px',
+                                                            fontSize: '0.7rem',
+                                                            fontWeight: '600',
+                                                            border: '1px solid rgba(111, 66, 193, 0.2)',
+                                                            display: 'inline-block'
+                                                        }}
+                                                    >
+                                                        <i className="bi bi-box me-1"></i>
+                                                        {cotizacion.total_items || 0}
+                                                    </span>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.85rem',
+                                                    color: '#2c3e50',
+                                                    border: 'none',
+                                                    fontWeight: '700',
+                                                    textAlign: 'right',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <div style={{ textAlign: 'right' }}>
+                                                        <span style={{ color: '#27ae60', fontSize: '0.9rem', fontWeight: '700' }}>
+                                                            S/ {(cotizacion.total || 0).toLocaleString()}
+                                                        </span>
+                                                        {cotizacion.comision_tarjeta > 0 && (
+                                                            <div style={{ color: '#e74c3c', fontSize: '0.6rem', marginTop: '1px' }}>
+                                                                <i className="bi bi-info-circle me-1"></i>
+                                                                +S/ {cotizacion.comision_tarjeta.toLocaleString()}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.8rem',
+                                                    border: 'none',
+                                                    textAlign: 'center',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <span 
+                                                        style={{
+                                                            background: cotizacion.metodo_pago === 'efectivo' 
+                                                                ? 'linear-gradient(135deg, #27ae60, #2ecc71)' 
+                                                                : cotizacion.metodo_pago === 'tarjeta'
+                                                                ? 'linear-gradient(135deg, #f39c12, #e67e22)'
+                                                                : cotizacion.metodo_pago === 'yape'
+                                                                ? 'linear-gradient(135deg, #6f42c1, #8e44ad)'
+                                                                : cotizacion.metodo_pago === 'plin'
+                                                                ? 'linear-gradient(135deg, #343a40, #495057)'
+                                                                : 'linear-gradient(135deg, #3498db, #5dade2)',
+                                                            color: 'white',
+                                                            padding: '4px 8px',
+                                                            borderRadius: '12px',
+                                                            fontWeight: '600',
+                                                            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                                                            fontSize: '0.7rem',
+                                                            display: 'inline-block'
+                                                        }}
+                                                    >
+                                                        <i className={`bi ${
+                                                            cotizacion.metodo_pago === 'efectivo' ? 'bi-cash' :
+                                                            cotizacion.metodo_pago === 'tarjeta' ? 'bi-credit-card' :
+                                                            cotizacion.metodo_pago === 'yape' ? 'bi-phone' :
+                                                            cotizacion.metodo_pago === 'plin' ? 'bi-phone' :
+                                                            'bi-bank'
+                                                        } me-1`}></i>
+                                                        {cotizacion.metodo_pago?.toUpperCase() || 'N/A'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px', 
+                                                    fontSize: '0.8rem',
+                                                    border: 'none',
+                                                    textAlign: 'center',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <span 
+                                                        className="pulse-hover"
+                                                        style={{
+                                                            background: cotizacion.estado === 'completada' 
+                                                                ? 'linear-gradient(135deg, #27ae60, #2ecc71)' 
+                                                                : cotizacion.estado === 'pendiente'
+                                                                ? 'linear-gradient(135deg, #f39c12, #e67e22)'
+                                                                : 'linear-gradient(135deg, #e74c3c, #c0392b)',
+                                                            color: 'white',
+                                                            padding: '4px 8px',
+                                                            borderRadius: '12px',
+                                                            fontWeight: '600',
+                                                            boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                                                            fontSize: '0.7rem',
+                                                            position: 'relative',
+                                                            overflow: 'hidden',
+                                                            display: 'inline-block'
+                                                        }}
+                                                    >
+                                                        <i className={`bi ${
+                                                            cotizacion.estado === 'completada' ? 'bi-check-circle' : 
+                                                            cotizacion.estado === 'pendiente' ? 'bi-clock' : 
+                                                            'bi-x-circle'
+                                                        } me-1`}></i>
+                                                        {cotizacion.estado === 'completada' ? 'Completada' :
+                                                         cotizacion.estado === 'pendiente' ? 'Pendiente' : 
+                                                         'Cancelada'}
+                                                    </span>
+                                                </td>
+                                                <td style={{ 
+                                                    padding: '14px 8px',
+                                                    border: 'none',
+                                                    textAlign: 'center',
+                                                    verticalAlign: 'middle'
+                                                }}>
+                                                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            onClick={async () => {
+                                                                setSelectedCotizacion(cotizacion);
+                                                                setShowDetalle(true);
+                                                                await loadCotizacionDetalle(cotizacion.id);
+                                                            }}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #6f42c1, #8e44ad)',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                padding: '4px 6px',
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: '600',
+                                                                boxShadow: '0 2px 6px rgba(111, 66, 193, 0.2)',
+                                                                transition: 'all 0.3s ease',
+                                                                minWidth: '32px',
+                                                                height: '32px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.transform = 'translateY(-1px) scale(1.03)';
+                                                                e.target.style.boxShadow = '0 4px 12px rgba(111, 66, 193, 0.3)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.transform = 'translateY(0) scale(1)';
+                                                                e.target.style.boxShadow = '0 2px 6px rgba(111, 66, 193, 0.2)';
+                                                            }}
+                                                            title="Ver detalle"
+                                                        >
+                                                            <i className="bi bi-eye"></i>
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            onClick={() => convertirAVenta(cotizacion)}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #27ae60, #2ecc71)',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                padding: '4px 6px',
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: '600',
+                                                                boxShadow: '0 2px 6px rgba(39, 174, 96, 0.2)',
+                                                                transition: 'all 0.3s ease',
+                                                                minWidth: '32px',
+                                                                height: '32px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.transform = 'translateY(-1px) scale(1.03)';
+                                                                e.target.style.boxShadow = '0 4px 12px rgba(39, 174, 96, 0.3)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.transform = 'translateY(0) scale(1)';
+                                                                e.target.style.boxShadow = '0 2px 6px rgba(39, 174, 96, 0.2)';
+                                                            }}
+                                                            title="Convertir a venta"
+                                                        >
+                                                            <i className="bi bi-cart-check"></i>
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            onClick={() => openEditor(cotizacion)}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #F09836, #e67e22)',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '8px',
+                                                                padding: '4px 6px',
+                                                                fontSize: '0.7rem',
+                                                                fontWeight: '600',
+                                                                boxShadow: '0 2px 6px rgba(240, 152, 54, 0.2)',
+                                                                transition: 'all 0.3s ease',
+                                                                minWidth: '32px',
+                                                                height: '32px',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.transform = 'translateY(-1px) scale(1.03)';
+                                                                e.target.style.boxShadow = '0 4px 12px rgba(240, 152, 54, 0.3)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.transform = 'translateY(0) scale(1)';
+                                                                e.target.style.boxShadow = '0 2px 6px rgba(240, 152, 54, 0.2)';
+                                                            }}
+                                                            title="Editar cotización"
+                                                        >
+                                                            <i className="bi bi-pencil-square"></i>
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            onClick={() => imprimirCotizacion(cotizacion)}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #17a2b8, #138496)',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '10px',
+                                                                padding: '6px 10px',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: '600',
+                                                                boxShadow: '0 2px 8px rgba(23, 162, 184, 0.2)',
+                                                                transition: 'all 0.3s ease'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.transform = 'translateY(-2px) scale(1.05)';
+                                                                e.target.style.boxShadow = '0 4px 15px rgba(23, 162, 184, 0.3)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.transform = 'translateY(0) scale(1)';
+                                                                e.target.style.boxShadow = '0 2px 8px rgba(23, 162, 184, 0.2)';
+                                                            }}
+                                                            title="Imprimir cotización"
+                                                        >
+                                                            <i className="bi bi-printer"></i>
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-sm"
+                                                            onClick={() => deleteCotizacion(cotizacion.id)}
+                                                            style={{
+                                                                background: 'linear-gradient(135deg, #e74c3c, #c0392b)',
+                                                                color: 'white',
+                                                                border: 'none',
+                                                                borderRadius: '10px',
+                                                                padding: '6px 10px',
+                                                                fontSize: '0.75rem',
+                                                                fontWeight: '600',
+                                                                boxShadow: '0 2px 8px rgba(231, 76, 60, 0.2)',
+                                                                transition: 'all 0.3s ease'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.transform = 'translateY(-2px) scale(1.05)';
+                                                                e.target.style.boxShadow = '0 4px 15px rgba(231, 76, 60, 0.3)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.transform = 'translateY(0) scale(1)';
+                                                                e.target.style.boxShadow = '0 2px 8px rgba(231, 76, 60, 0.2)';
+                                                            }}
+                                                            title="Eliminar"
+                                                        >
+                                                            <i className="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {/* Paginación */}
+                        {filteredCotizaciones.length > itemsPerPage && (
+                            <div className="d-flex justify-content-between align-items-center mt-4 px-4">
+                                <div className="d-flex align-items-center">
+                                    <span style={{ 
+                                        fontSize: '0.9rem', 
+                                        color: '#6c757d',
+                                        fontWeight: '500'
+                                    }}>
+                                        Mostrando {startIndex + 1} - {Math.min(endIndex, filteredCotizaciones.length)} de {filteredCotizaciones.length} cotizaciones
+                                    </span>
+                                </div>
+                                
+                                <nav aria-label="Paginación de cotizaciones">
+                                    <ul className="pagination mb-0" style={{ gap: '5px' }}>
+                                        {/* Botón Anterior */}
+                                        <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                                            <button
+                                                className="page-link"
+                                                onClick={() => setCurrentPage(currentPage - 1)}
+                                                disabled={currentPage === 1}
+                                                style={{
+                                                    background: currentPage === 1 
+                                                        ? '#f8f9fa' 
+                                                        : 'linear-gradient(135deg, #6f42c1, #8e44ad)',
+                                                    color: currentPage === 1 ? '#6c757d' : 'white',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    padding: '8px 12px',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: '600',
+                                                    transition: 'all 0.3s ease'
+                                                }}
+                                            >
+                                                <i className="bi bi-chevron-left me-1"></i>
+                                                Anterior
+                                            </button>
+                                        </li>
+                                        
+                                        {/* Números de página */}
+                                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                                            // Mostrar solo algunas páginas alrededor de la actual
+                                            if (
+                                                page === 1 || 
+                                                page === totalPages || 
+                                                (page >= currentPage - 1 && page <= currentPage + 1)
+                                            ) {
+                                                return (
+                                                    <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
+                                                        <button
+                                                            className="page-link"
+                                                            onClick={() => setCurrentPage(page)}
+                                                            style={{
+                                                                background: currentPage === page 
+                                                                    ? 'linear-gradient(135deg, #F09836, #e67e22)' 
+                                                                    : 'white',
+                                                                color: currentPage === page ? 'white' : '#6f42c1',
+                                                                border: currentPage === page ? 'none' : '1px solid rgba(111, 66, 193, 0.2)',
+                                                                borderRadius: '8px',
+                                                                padding: '8px 12px',
+                                                                fontSize: '0.85rem',
+                                                                fontWeight: '600',
+                                                                minWidth: '40px',
+                                                                transition: 'all 0.3s ease',
+                                                                boxShadow: currentPage === page 
+                                                                    ? '0 4px 12px rgba(240, 152, 54, 0.3)' 
+                                                                    : '0 2px 6px rgba(0, 0, 0, 0.05)'
+                                                            }}
+                                                        >
+                                                            {page}
+                                                        </button>
+                                                    </li>
+                                                );
+                                            } else if (
+                                                (page === currentPage - 2 && currentPage > 3) ||
+                                                (page === currentPage + 2 && currentPage < totalPages - 2)
+                                            ) {
+                                                return (
+                                                    <li key={page} className="page-item disabled">
+                                                        <span className="page-link" style={{
+                                                            background: 'transparent',
+                                                            border: 'none',
+                                                            color: '#6c757d',
+                                                            padding: '8px 12px'
+                                                        }}>
+                                                            ...
+                                                        </span>
+                                                    </li>
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                        
+                                        {/* Botón Siguiente */}
+                                        <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                                            <button
+                                                className="page-link"
+                                                onClick={() => setCurrentPage(currentPage + 1)}
+                                                disabled={currentPage === totalPages}
+                                                style={{
+                                                    background: currentPage === totalPages 
+                                                        ? '#f8f9fa' 
+                                                        : 'linear-gradient(135deg, #6f42c1, #8e44ad)',
+                                                    color: currentPage === totalPages ? '#6c757d' : 'white',
+                                                    border: 'none',
+                                                    borderRadius: '8px',
+                                                    padding: '8px 12px',
+                                                    fontSize: '0.85rem',
+                                                    fontWeight: '600',
+                                                    transition: 'all 0.3s ease'
+                                                }}
+                                            >
+                                                Siguiente
+                                                <i className="bi bi-chevron-right ms-1"></i>
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Modal de detalle de cotización */}
+                    {showDetalle && selectedCotizacion && (
+                        <div className="modal show d-block" tabIndex="-1" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                            <div className="modal-dialog modal-lg modal-dialog-centered">
+                                <div 
+                                    className="modal-content"
+                                    style={{
+                                        borderRadius: '16px',
+                                        border: 'none',
+                                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)'
+                                    }}
+                                >
+                                    <div 
+                                        className="modal-header"
+                                        style={{
+                                            background: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)',
+                                            color: 'white',
+                                            borderRadius: '16px 16px 0 0',
+                                            border: 'none'
+                                        }}
+                                    >
+                                        <h5 className="modal-title fw-bold">
+                                            <i className="bi bi-file-text me-2"></i>
+                                            Detalle de Cotización COT-{selectedCotizacion.id}
+                                        </h5>
+                                        <button 
+                                            type="button" 
+                                            className="btn-close btn-close-white" 
+                                            onClick={() => setShowDetalle(false)}
+                                        ></button>
+                                    </div>
+                                    <div className="modal-body">
+                                        <div className="row mb-3">
+                                            <div className="col-md-6">
+                                                <h6>Información General</h6>
+                                                <p className="mb-1">
+                                                    <strong>Fecha:</strong> {formatDate(selectedCotizacion.fecha_creacion)}
+                                                </p>
+                                                <p className="mb-1">
+                                                    <strong>Cliente:</strong> {selectedCotizacion.cliente_nombre || 'No especificado'}
+                                                </p>
+                                                <p className="mb-1">
+                                                    <strong>Método de Pago:</strong> {selectedCotizacion.metodo_pago?.toUpperCase() || 'N/A'}
+                                                </p>
+                                                {selectedCotizacion.codigo_transferencia && (
+                                                    <p className="mb-1">
+                                                        <strong>Código Transferencia:</strong> {selectedCotizacion.codigo_transferencia}
+                                                    </p>
+                                                )}
+                                                {selectedCotizacion.adelanto > 0 && (
+                                                    <p className="mb-1">
+                                                        <strong>Adelanto:</strong> S/ {selectedCotizacion.adelanto.toLocaleString()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="col-md-6">
+                                                <h6>Totales</h6>
+                                                <p className="mb-1">
+                                                    <strong>Total Items:</strong> {selectedCotizacion.total_items || 0}
+                                                </p>
+                                                <p className="mb-1">
+                                                    <strong>Subtotal:</strong> S/ {(selectedCotizacion.subtotal || 0).toLocaleString()}
+                                                </p>
+                                                {selectedCotizacion.comision_tarjeta > 0 && (
+                                                    <p className="mb-1">
+                                                        <strong>Comisión Tarjeta:</strong> S/ {selectedCotizacion.comision_tarjeta.toLocaleString()}
+                                                    </p>
+                                                )}
+                                                <p className="mb-1">
+                                                    <strong className="text-success">Total Final:</strong> S/ {(selectedCotizacion.total || 0).toLocaleString()}
+                                                </p>
+                                            </div>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <span className="badge bg-secondary">
-                                            {cotizacion.total_items || 0} items
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <strong className="text-success">
-                                            ${(cotizacion.total || 0).toLocaleString()}
-                                        </strong>
-                                        {cotizacion.comision_tarjeta > 0 && (
-                                            <div className="text-muted small">
-                                                +${cotizacion.comision_tarjeta.toLocaleString()} comisión
+
+                                        {/* Productos de la cotización */}
+                                        {loadingDetalle ? (
+                                            <div className="text-center py-3">
+                                                <div className="spinner-border spinner-border-sm" role="status">
+                                                    <span className="visually-hidden">Cargando detalles...</span>
+                                                </div>
+                                                <p className="mt-2 mb-0">Cargando detalles de productos...</p>
+                                            </div>
+                                        ) : cotizacionDetalle && cotizacionDetalle.productos ? (
+                                            <div>
+                                                <h6>Productos en la Cotización</h6>
+                                                <div className="table-responsive">
+                                                    <table className="table table-sm">
+                                                        <thead className="table-light">
+                                                            <tr>
+                                                                <th>Producto</th>
+                                                                <th>Cantidad</th>
+                                                                <th>Precio Unit.</th>
+                                                                <th>Subtotal</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {cotizacionDetalle.productos.map((producto, index) => (
+                                                                <tr key={index}>
+                                                                    <td>
+                                                                        <div>
+                                                                            <strong>{producto.producto_nombre}</strong>
+                                                                            {producto.producto_codigo && (
+                                                                                <div className="text-muted small">
+                                                                                    Código: {producto.producto_codigo}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                    <td>{producto.cantidad}</td>
+                                                                    <td>S/ {producto.precio_unitario.toLocaleString()}</td>
+                                                                    <td className="text-success">
+                                                                        <strong>S/ {producto.subtotal.toLocaleString()}</strong>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                        <tfoot>
+                                                            <tr className="table-info">
+                                                                <th colSpan="3" className="text-end">Total:</th>
+                                                                <th className="text-success">
+                                                                    S/ {cotizacionDetalle.resumen?.total_productos?.toLocaleString() || '0'}
+                                                                </th>
+                                                            </tr>
+                                                        </tfoot>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="alert alert-warning">
+                                                <i className="bi bi-exclamation-triangle me-2"></i>
+                                                No se pudieron cargar los detalles de los productos.
                                             </div>
                                         )}
-                                    </td>
-                                    <td>
-                                        <span className={`badge ${
-                                            cotizacion.metodo_pago === 'efectivo' ? 'bg-success' :
-                                            cotizacion.metodo_pago === 'tarjeta' ? 'bg-warning' :
-                                            cotizacion.metodo_pago === 'yape' ? 'bg-info' :
-                                            cotizacion.metodo_pago === 'plin' ? 'bg-dark' : 'bg-primary'
-                                        }`}>
-                                            {cotizacion.metodo_pago?.toUpperCase() || 'N/A'}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span className="badge bg-warning">
-                                            Pendiente
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div className="btn-group" role="group">
-                                            <button
-                                                className="btn btn-sm btn-outline-primary"
-                                                onClick={async () => {
-                                                    setSelectedCotizacion(cotizacion);
-                                                    setShowDetalle(true);
-                                                    await loadCotizacionDetalle(cotizacion.id);
-                                                }}
-                                                title="Ver detalle"
-                                            >
-                                                <i className="bi bi-eye"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-success"
-                                                onClick={() => convertirAVenta(cotizacion)}
-                                                title="Ir a página de Venta"
-                                            >
-                                                <i className="bi bi-cart-check"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-primary"
-                                                onClick={() => openEditor(cotizacion)}
-                                                title="Editar cotización"
-                                            >
-                                                <i className="bi bi-pencil-square"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-info"
-                                                onClick={() => imprimirCotizacion(cotizacion)}
-                                                title="Imprimir cotización"
-                                            >
-                                                <i className="bi bi-printer"></i>
-                                            </button>
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                onClick={() => deleteCotizacion(cotizacion.id)}
-                                                title="Eliminar"
-                                            >
-                                                <i className="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Modal de detalle de cotización */}
-            {showDetalle && selectedCotizacion && (
-                <div className="modal show d-block" tabIndex="-1" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-lg modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header bg-info text-white">
-                                <h5 className="modal-title">
-                                    <i className="bi bi-file-text me-2"></i>
-                                    Detalle de Cotización COT-{selectedCotizacion.id}
-                                </h5>
-                                <button 
-                                    type="button" 
-                                    className="btn-close btn-close-white" 
-                                    onClick={() => setShowDetalle(false)}
-                                ></button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="row mb-3">
-                                    <div className="col-md-6">
-                                        <h6>Información General</h6>
-                                        <p className="mb-1">
-                                            <strong>Fecha:</strong> {formatDate(selectedCotizacion.fecha_creacion)}
-                                        </p>
-                                        <p className="mb-1">
-                                            <strong>Cliente:</strong> {selectedCotizacion.cliente_nombre || 'No especificado'}
-                                        </p>
-                                        <p className="mb-1">
-                                            <strong>Método de Pago:</strong> {selectedCotizacion.metodo_pago?.toUpperCase() || 'N/A'}
-                                        </p>
-                                        {selectedCotizacion.codigo_transferencia && (
-                                            <p className="mb-1">
-                                                <strong>Código Transferencia:</strong> {selectedCotizacion.codigo_transferencia}
-                                            </p>
-                                        )}
-                                        {selectedCotizacion.adelanto > 0 && (
-                                            <p className="mb-1">
-                                                <strong>Adelanto:</strong> ${selectedCotizacion.adelanto.toLocaleString()}
-                                            </p>
-                                        )}
                                     </div>
-                                    <div className="col-md-6">
-                                        <h6>Totales</h6>
-                                        <p className="mb-1">
-                                            <strong>Total Items:</strong> {selectedCotizacion.total_items || 0}
-                                        </p>
-                                        <p className="mb-1">
-                                            <strong>Subtotal:</strong> ${(selectedCotizacion.subtotal || 0).toLocaleString()}
-                                        </p>
-                                        {selectedCotizacion.comision_tarjeta > 0 && (
-                                            <p className="mb-1">
-                                                <strong>Comisión Tarjeta:</strong> ${selectedCotizacion.comision_tarjeta.toLocaleString()}
-                                            </p>
-                                        )}
-                                        <p className="mb-1">
-                                            <strong className="text-success">Total Final:</strong> ${(selectedCotizacion.total || 0).toLocaleString()}
-                                        </p>
+                                    <div className="modal-footer">
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-secondary" 
+                                            onClick={() => {
+                                                setShowDetalle(false);
+                                                setCotizacionDetalle(null);
+                                            }}
+                                            disabled={convertingToSale}
+                                        >
+                                            Cerrar
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-info"
+                                            onClick={() => imprimirCotizacionDetalle(selectedCotizacion)}
+                                            disabled={convertingToSale}
+                                        >
+                                            <i className="bi bi-printer me-2"></i>
+                                            Imprimir
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-primary"
+                                            onClick={() => openEditor(selectedCotizacion)}
+                                            disabled={convertingToSale}
+                                        >
+                                            {convertingToSale ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                                    Cargando...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="bi bi-pencil-square me-2"></i>
+                                                    Modificar Cotización
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    )}
 
-                                {/* Productos de la cotización */}
-                                {loadingDetalle ? (
-                                    <div className="text-center py-3">
-                                        <div className="spinner-border spinner-border-sm" role="status">
-                                            <span className="visually-hidden">Cargando detalles...</span>
-                                        </div>
-                                        <p className="mt-2 mb-0">Cargando detalles de productos...</p>
+                    {/* Modal Editor */}
+                    {showEditor && (
+                        <div className="modal show d-block" tabIndex="-1" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                            <div className="modal-dialog modal-xl modal-dialog-centered">
+                                <div 
+                                    className="modal-content"
+                                    style={{
+                                        borderRadius: '16px',
+                                        border: 'none',
+                                        boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)'
+                                    }}
+                                >
+                                    <div 
+                                        className="modal-header"
+                                        style={{
+                                            background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)',
+                                            color: 'white',
+                                            borderRadius: '16px 16px 0 0',
+                                            border: 'none'
+                                        }}
+                                    >
+                                        <h5 className="modal-title fw-bold">
+                                            <i className="bi bi-pencil-square me-2"></i>
+                                            Editar Cotización {editingCotizacionId ? `COT-${editingCotizacionId}` : ''}
+                                        </h5>
+                                        <button 
+                                            type="button" 
+                                            className="btn-close btn-close-white" 
+                                            onClick={() => setShowEditor(false)}
+                                        ></button>
                                     </div>
-                                ) : cotizacionDetalle && cotizacionDetalle.productos ? (
-                                    <div>
-                                        <h6>Productos en la Cotización</h6>
+                                    <div className="modal-body">
+                                        <div className="mb-3 d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <strong>Cliente:</strong> {selectedCotizacion?.cliente_nombre || 'No especificado'}
+                                            </div>
+                                            <div>
+                                                <button 
+                                                    className="btn btn-sm btn-outline-success me-2" 
+                                                    onClick={addEditingRow}
+                                                >
+                                                    <i className="bi bi-plus"></i> Agregar fila
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <div className="table-responsive">
                                             <table className="table table-sm">
                                                 <thead className="table-light">
                                                     <tr>
-                                                        <th>Producto</th>
-                                                        <th>Cantidad</th>
-                                                        <th>Precio Unit.</th>
-                                                        <th>Subtotal</th>
+                                                        <th style={{minWidth: 300}}>Producto</th>
+                                                        <th style={{width: 120}}>Cantidad</th>
+                                                        <th style={{width: 160}}>Precio Unit.</th>
+                                                        <th style={{width: 160}}>Subtotal</th>
+                                                        <th style={{width: 80}}>Acciones</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    {cotizacionDetalle.productos.map((producto, index) => (
-                                                        <tr key={index}>
-                                                            <td>
-                                                                <div>
-                                                                    <strong>{producto.producto_nombre}</strong>
-                                                                    {producto.producto_codigo && (
-                                                                        <div className="text-muted small">
-                                                                            Código: {producto.producto_codigo}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td>{producto.cantidad}</td>
-                                                            <td>${producto.precio_unitario.toLocaleString()}</td>
-                                                            <td className="text-success">
-                                                                <strong>${producto.subtotal.toLocaleString()}</strong>
-                                                            </td>
+                                                    {editingItems.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan="5" className="text-center">No hay productos para editar</td>
                                                         </tr>
-                                                    ))}
+                                                    ) : (
+                                                        editingItems.map((it, idx) => (
+                                                            <tr key={idx}>
+                                                                <td>
+                                                                    <input 
+                                                                        type="text" 
+                                                                        className="form-control form-control-sm" 
+                                                                        value={it.producto_nombre || ''} 
+                                                                        onChange={(e) => { 
+                                                                            const v = e.target.value; 
+                                                                            const copy = [...editingItems]; 
+                                                                            copy[idx].producto_nombre = v; 
+                                                                            setEditingItems(copy); 
+                                                                        }} 
+                                                                        placeholder="Nombre del producto" 
+                                                                    />
+                                                                    <input 
+                                                                        type="text" 
+                                                                        className="form-control form-control-sm mt-1" 
+                                                                        value={it.producto_codigo || ''} 
+                                                                        onChange={(e) => { 
+                                                                            const v = e.target.value; 
+                                                                            const copy = [...editingItems]; 
+                                                                            copy[idx].producto_codigo = v; 
+                                                                            setEditingItems(copy); 
+                                                                        }} 
+                                                                        placeholder="Código" 
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        min="0" 
+                                                                        className="form-control form-control-sm text-end" 
+                                                                        value={it.cantidad} 
+                                                                        onChange={(e) => updateEditingItem(idx, 'cantidad', e.target.value)} 
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <input 
+                                                                        type="number" 
+                                                                        min="0" 
+                                                                        step="0.01" 
+                                                                        className="form-control form-control-sm text-end" 
+                                                                        value={it.precio_unitario} 
+                                                                        onChange={(e) => updateEditingItem(idx, 'precio_unitario', e.target.value)} 
+                                                                    />
+                                                                </td>
+                                                                <td className="text-end">
+                                                                    S/ {Number(it.subtotal || 0).toLocaleString()}
+                                                                </td>
+                                                                <td>
+                                                                    <button 
+                                                                        className="btn btn-sm btn-outline-danger" 
+                                                                        onClick={() => removeEditingRow(idx)}
+                                                                    >
+                                                                        <i className="bi bi-trash"></i>
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
                                                 </tbody>
                                                 <tfoot>
-                                                    <tr className="table-info">
-                                                        <th colSpan="3" className="text-end">Total:</th>
-                                                        <th className="text-success">
-                                                            ${cotizacionDetalle.resumen?.total_productos?.toLocaleString() || '0'}
-                                                        </th>
+                                                    <tr>
+                                                        <th className="text-end">Totales:</th>
+                                                        <th className="text-end">{editingTotals.total_items || 0}</th>
+                                                        <th></th>
+                                                        <th className="text-end">S/ {Number(editingTotals.total || 0).toLocaleString()}</th>
+                                                        <th></th>
+                                                    </tr>
+                                                    <tr>
+                                                        <td colSpan="3" className="text-end">Total con comisión:</td>
+                                                        <td className="text-end">S/ {Number(editingTotals.total_con_comision || 0).toLocaleString()}</td>
+                                                        <td></td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className="alert alert-warning">
-                                        <i className="bi bi-exclamation-triangle me-2"></i>
-                                        No se pudieron cargar los detalles de los productos.
-                                    </div>
-                                )}
-                            </div>
-                            <div className="modal-footer">
-                                <button 
-                                    type="button" 
-                                    className="btn btn-secondary" 
-                                    onClick={() => {
-                                        setShowDetalle(false);
-                                        setCotizacionDetalle(null);
-                                    }}
-                                    disabled={convertingToSale}
-                                >
-                                    Cerrar
-                                </button>
-                                <button 
-                                    type="button" 
-                                    className="btn btn-info"
-                                    onClick={() => imprimirCotizacionDetalle(selectedCotizacion)}
-                                    disabled={convertingToSale}
-                                >
-                                    <i className="bi bi-printer me-2"></i>
-                                    Imprimir
-                                </button>
-                                <button 
-                                    type="button" 
-                                    className="btn btn-primary"
-                                    onClick={() => openEditor(selectedCotizacion)}
-                                    disabled={convertingToSale}
-                                >
-                                    {convertingToSale ? (
-                                        <>
-                                            <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                                            Cargando...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <i className="bi bi-pencil-square me-2"></i>
-                                            Modificar Cotización
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showEditor && (
-                <div className="modal show d-block" tabIndex="-1" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
-                    <div className="modal-dialog modal-xl modal-dialog-centered">
-                        <div className="modal-content">
-                            <div className="modal-header bg-primary text-white">
-                                <h5 className="modal-title">Editar Cotización {editingCotizacionId ? `COT-${editingCotizacionId}` : ''}</h5>
-                                <button type="button" className="btn-close btn-close-white" onClick={() => setShowEditor(false)} aria-label="Close"></button>
-                            </div>
-                            <div className="modal-body">
-                                <div className="mb-3 d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <strong>Cliente:</strong> {selectedCotizacion?.cliente_nombre || 'No especificado'}
-                                    </div>
-                                    <div>
-                                        <button className="btn btn-sm btn-outline-success me-2" onClick={addEditingRow}><i className="bi bi-plus"></i> Agregar fila</button>
-                                    </div>
-                                </div>
-
-                                <div className="table-responsive">
-                                    <table className="table table-sm">
-                                        <thead className="table-light">
-                                            <tr>
-                                                <th style={{minWidth: 300}}>Producto</th>
-                                                <th style={{width: 120}}>Cantidad</th>
-                                                <th style={{width: 160}}>Precio Unit.</th>
-                                                <th style={{width: 160}}>Subtotal</th>
-                                                <th style={{width: 80}}>Acciones</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {editingItems.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="5" className="text-center">No hay productos para editar</td>
-                                                </tr>
+                                    <div className="modal-footer">
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-secondary" 
+                                            onClick={() => setShowEditor(false)}
+                                        >
+                                            Cerrar
+                                        </button>
+                                        <button 
+                                            type="button" 
+                                            className="btn btn-primary" 
+                                            onClick={saveEditedDetalle} 
+                                            disabled={savingEdit}
+                                        >
+                                            {savingEdit ? (
+                                                <>
+                                                    <span className="spinner-border spinner-border-sm me-2"></span>
+                                                    Guardando...
+                                                </>
                                             ) : (
-                                                editingItems.map((it, idx) => (
-                                                    <tr key={idx}>
-                                                        <td style={{position: 'relative'}}>
-                                                            <input type="text" className="form-control form-control-sm" value={it.producto_nombre || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_nombre = v; setEditingItems(copy); searchProductForRow(v, idx); }} placeholder="Buscar producto por nombre o código" />
-                                                            <input type="text" className="form-control form-control-sm mt-1" value={it.producto_codigo || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_codigo = v; setEditingItems(copy); }} placeholder="Código" />
-                                                            {/* Dropdown de resultados */}
-                                                            {productSearchLoading[idx] && (
-                                                                <div className="position-absolute bg-white border rounded p-2" style={{zIndex: 50, top: '68px', left: 0, right: 0}}>
-                                                                    <div className="small text-muted">Buscando...</div>
-                                                                </div>
-                                                            )}
-                                                            {productSearchResults[idx] && productSearchResults[idx].length > 0 && (
-                                                                <div className="position-absolute bg-white border rounded" style={{zIndex: 50, top: '68px', left: 0, right: 0, maxHeight: 240, overflowY: 'auto'}}>
-                                                                    {productSearchResults[idx].map(prod => (
-                                                                        <div key={prod.id} className="p-2 list-group-item list-group-item-action" style={{cursor: 'pointer'}} onClick={() => selectProductForRow(idx, prod)}>
-                                                                            <div><strong>{prod.descripcion}</strong> <small className="text-muted">{prod.codigo}</small></div>
-                                                                            <div className="small text-muted">S/ {Number(prod.pre_general || prod.precio_unitario || 0).toLocaleString()}</div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" min="0" className="form-control form-control-sm text-end" value={it.cantidad} onChange={(e) => updateEditingItem(idx, 'cantidad', e.target.value)} />
-                                                        </td>
-                                                        <td>
-                                                            <input type="number" min="0" step="0.01" className="form-control form-control-sm text-end" value={it.precio_unitario} onChange={(e) => updateEditingItem(idx, 'precio_unitario', e.target.value)} />
-                                                        </td>
-                                                        <td className="text-end">
-                                                            S/ {Number(it.subtotal || 0).toLocaleString()}
-                                                        </td>
-                                                        <td>
-                                                            <button className="btn btn-sm btn-outline-danger" onClick={() => removeEditingRow(idx)}><i className="bi bi-trash"></i></button>
-                                                        </td>
-                                                    </tr>
-                                                ))
+                                                <>Guardar cambios</>
                                             )}
-                                        </tbody>
-                                        <tfoot>
-                                            <tr>
-                                                <th className="text-end">Totales:</th>
-                                                <th className="text-end">{editingTotals.total_items || 0}</th>
-                                                <th></th>
-                                                <th className="text-end">S/ {Number(editingTotals.total || 0).toLocaleString()}</th>
-                                                <th></th>
-                                            </tr>
-                                            <tr>
-                                                <td colSpan="3" className="text-end">Total con comisión:</td>
-                                                <td className="text-end">S/ {Number(editingTotals.total_con_comision || 0).toLocaleString()}</td>
-                                                <td></td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                            <div className="modal-footer">
-                                <button type="button" className="btn btn-secondary" onClick={() => setShowEditor(false)}>Cerrar</button>
-                                <button type="button" className="btn btn-primary" onClick={saveEditedDetalle} disabled={savingEdit}>
-                                    {savingEdit ? (
-                                        <><span className="spinner-border spinner-border-sm me-2"></span>Guardando...</>
-                                    ) : (
-                                        <>Guardar cambios</>
-                                    )}
-                                </button>
-                            </div>
                         </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal editor inline para editar items de una cotización */}
-            <div className="modal fade" id="cotizacionEditorModal" tabIndex="-1" aria-hidden="true">
-                <div className="modal-dialog modal-xl modal-dialog-centered">
-                    <div className="modal-content">
-                        <div className="modal-header bg-primary text-white">
-                            <h5 className="modal-title">Editar Cotización {editingCotizacionId ? `COT-${editingCotizacionId}` : ''}</h5>
-                            <button type="button" className="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                        </div>
-                        <div className="modal-body">
-                            <div className="mb-3 d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>Cliente:</strong> {selectedCotizacion?.cliente_nombre || 'No especificado'}
-                                </div>
-                                <div>
-                                    <button className="btn btn-sm btn-outline-success me-2" onClick={addEditingRow}><i className="bi bi-plus"></i> Agregar fila</button>
-                                </div>
-                            </div>
-
-                            <div className="table-responsive">
-                                <table className="table table-sm">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th style={{minWidth: 300}}>Producto</th>
-                                            <th style={{width: 120}}>Cantidad</th>
-                                            <th style={{width: 160}}>Precio Unit.</th>
-                                            <th style={{width: 160}}>Subtotal</th>
-                                            <th style={{width: 80}}>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {editingItems.length === 0 ? (
-                                            <tr>
-                                                <td colSpan="5" className="text-center">No hay productos para editar</td>
-                                            </tr>
-                                        ) : (
-                                            editingItems.map((it, idx) => (
-                                                <tr key={idx}>
-                                                    <td>
-                                                        <input type="text" className="form-control form-control-sm" value={it.producto_nombre || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_nombre = v; setEditingItems(copy); }} placeholder="Nombre del producto" />
-                                                        <input type="text" className="form-control form-control-sm mt-1" value={it.producto_codigo || ''} onChange={(e) => { const v = e.target.value; const copy = [...editingItems]; copy[idx].producto_codigo = v; setEditingItems(copy); }} placeholder="Código" />
-                                                    </td>
-                                                    <td>
-                                                        <input type="number" min="0" className="form-control form-control-sm text-end" value={it.cantidad} onChange={(e) => updateEditingItem(idx, 'cantidad', e.target.value)} />
-                                                    </td>
-                                                    <td>
-                                                        <input type="number" min="0" step="0.01" className="form-control form-control-sm text-end" value={it.precio_unitario} onChange={(e) => updateEditingItem(idx, 'precio_unitario', e.target.value)} />
-                                                    </td>
-                                                    <td className="text-end">
-                                                        S/ {Number(it.subtotal || 0).toLocaleString()}
-                                                    </td>
-                                                    <td>
-                                                        <button className="btn btn-sm btn-outline-danger" onClick={() => removeEditingRow(idx)}><i className="bi bi-trash"></i></button>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr>
-                                            <th className="text-end">Totales:</th>
-                                            <th className="text-end">{editingTotals.total_items || 0}</th>
-                                            <th></th>
-                                            <th className="text-end">S/ {Number(editingTotals.total || 0).toLocaleString()}</th>
-                                            <th></th>
-                                        </tr>
-                                        <tr>
-                                            <td colSpan="3" className="text-end">Total con comisión:</td>
-                                            <td className="text-end">S/ {Number(editingTotals.total_con_comision || 0).toLocaleString()}</td>
-                                            <td></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </div>
-                        <div className="modal-footer">
-                            <button type="button" className="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                            <button type="button" className="btn btn-primary" onClick={saveEditedDetalle} disabled={savingEdit}>
-                                {savingEdit ? (
-                                    <><span className="spinner-border spinner-border-sm me-2"></span>Guardando...</>
-                                ) : (
-                                    <>Guardar cambios</>
-                                )}
-                            </button>
-                        </div>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>
+        </>
     );
 }
 

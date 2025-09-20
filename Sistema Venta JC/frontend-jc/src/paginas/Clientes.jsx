@@ -58,6 +58,11 @@ export default function Clientes() {
     const [_showEditModal, _setShowEditModal] = useState(false);
     const [filtroEstado, setFiltroEstado] = useState('activos'); // 'activos', 'todos', 'inactivos'
     
+    // Estados para confirmación
+    const [showConfirmModal, setShowConfirmModal] = useState(false);
+    const [confirmAction, setConfirmAction] = useState(null);
+    const [confirmData, setConfirmData] = useState(null);
+    
     // Estados para búsqueda y paginación
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
@@ -95,6 +100,20 @@ export default function Clientes() {
             return;
         }
 
+        // Validar teléfono si se proporciona
+        if (formData.telefono.trim()) {
+            if (formData.telefono.length !== 9) {
+                setError('El teléfono debe tener exactamente 9 dígitos');
+                setLoading(false);
+                return;
+            }
+            if (!/^\d{9}$/.test(formData.telefono)) {
+                setError('El teléfono solo debe contener números');
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             console.log('📝 Creando nuevo cliente:', formData);
 
@@ -129,10 +148,23 @@ export default function Clientes() {
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: value
-        }));
+        
+        // Validación específica para el campo teléfono
+        if (name === 'telefono') {
+            // Solo permitir números y limitar a 9 dígitos
+            const numerosSolo = value.replace(/[^0-9]/g, '');
+            const telefonoLimitado = numerosSolo.slice(0, 9);
+            
+            setFormData(prev => ({
+                ...prev,
+                [name]: telefonoLimitado
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                [name]: value
+            }));
+        }
     };
 
     // Array filtrado de clientes según el estado seleccionado
@@ -192,6 +224,30 @@ export default function Clientes() {
         }
     };
 
+    // Funciones para confirmación moderna
+    const showConfirmation = (action, data) => {
+        setConfirmAction(action);
+        setConfirmData(data);
+        setShowConfirmModal(true);
+    };
+
+    const executeConfirmAction = async () => {
+        if (confirmAction === 'delete') {
+            await executeDeleteClient(confirmData.id, confirmData.nombre);
+        } else if (confirmAction === 'reactivate') {
+            await executeReactivateClient(confirmData.id, confirmData.nombre);
+        }
+        setShowConfirmModal(false);
+        setConfirmAction(null);
+        setConfirmData(null);
+    };
+
+    const cancelConfirmAction = () => {
+        setShowConfirmModal(false);
+        setConfirmAction(null);
+        setConfirmData(null);
+    };
+
     const toggleModal = () => {
         setShowModal(!showModal);
         // Si se está editando, cancelar la edición
@@ -200,11 +256,11 @@ export default function Clientes() {
         }
     };
 
-    const eliminarCliente = async (id, nombre) => {
-        if (!window.confirm(`¿Estás seguro de que deseas eliminar el cliente "${nombre}"?`)) {
-            return;
-        }
+    const eliminarCliente = (id, nombre) => {
+        showConfirmation('delete', { id, nombre });
+    };
 
+    const executeDeleteClient = async (id, nombre) => {
         try {
             setLoading(true);
             const response = await clientService.delete(id);
@@ -231,11 +287,11 @@ export default function Clientes() {
     };
 
     // Reactivar cliente
-    const reactivarCliente = async (id, nombre) => {
-        if (!window.confirm(`¿Estás seguro de que deseas reactivar el cliente "${nombre}"?`)) {
-            return;
-        }
+    const reactivarCliente = (id, nombre) => {
+        showConfirmation('reactivate', { id, nombre });
+    };
 
+    const executeReactivateClient = async (id, nombre) => {
         try {
             setLoading(true);
             const response = await clientService.update(id, { estado: true });
@@ -311,6 +367,20 @@ export default function Clientes() {
             return;
         }
 
+        // Validar teléfono si se proporciona
+        if (formData.telefono.trim()) {
+            if (formData.telefono.length !== 9) {
+                setError('El teléfono debe tener exactamente 9 dígitos');
+                setLoading(false);
+                return;
+            }
+            if (!/^\d{9}$/.test(formData.telefono)) {
+                setError('El teléfono solo debe contener números');
+                setLoading(false);
+                return;
+            }
+        }
+
         try {
             console.log('✏️ Actualizando cliente:', editingClient.id);
 
@@ -352,69 +422,215 @@ export default function Clientes() {
         >
             {/* Header Section */}
             <div 
-                className='p-3 p-md-4 border-bottom'
+                className='p-4 border-0 position-relative overflow-hidden'
                 style={{
-                    background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
-                    borderBottom: '2px solid rgba(107, 66, 193, 0.1)'
+                    background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 50%, #17a2b8 100%)',
+                    color: 'white',
+                    minHeight: '140px'
                 }}
             >
-                <div className='d-flex justify-content-between align-items-center flex-wrap gap-2'>
-                    <div>
-                        <h2 
-                            className='mb-1 fw-bold'
-                            style={{
-                                background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)',
-                                WebkitBackgroundClip: 'text',
-                                WebkitTextFillColor: 'transparent',
-                                backgroundClip: 'text',
-                                fontSize: 'clamp(1.5rem, 4vw, 2rem)'
-                            }}
-                        >
-                            <i className='bi bi-people-fill me-2 me-md-3' style={{ color: '#6f42c1' }}></i>
-                            Gestión de Clientes
-                        </h2>
-                        <p className='mb-0 text-muted'>Administra la información de tus clientes</p>
+                {/* Elementos decorativos de fondo */}
+                <div 
+                    className='position-absolute'
+                    style={{
+                        top: '-50%',
+                        right: '-10%',
+                        width: '300px',
+                        height: '300px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        borderRadius: '50%',
+                        filter: 'blur(80px)'
+                    }}
+                ></div>
+                <div 
+                    className='position-absolute'
+                    style={{
+                        bottom: '-30%',
+                        left: '-10%',
+                        width: '200px',
+                        height: '200px',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        borderRadius: '50%',
+                        filter: 'blur(60px)'
+                    }}
+                ></div>
+
+                <div className='position-relative'>
+                    <div className='d-flex justify-content-between align-items-center flex-wrap gap-3'>
+                        <div className='flex-grow-1'>
+                            <div className='d-flex align-items-center mb-2'>
+                                <div 
+                                    className='me-3 d-flex align-items-center justify-content-center'
+                                    style={{
+                                        width: '50px',
+                                        height: '50px',
+                                        background: 'rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '15px',
+                                        backdropFilter: 'blur(10px)',
+                                        border: '1px solid rgba(255, 255, 255, 0.3)'
+                                    }}
+                                >
+                                    <i className='bi bi-people-fill' style={{ fontSize: '1.5rem', color: 'white' }}></i>
+                                </div>
+                                <div>
+                                    <h1 
+                                        className='mb-1 fw-bold'
+                                        style={{
+                                            fontSize: 'clamp(1.75rem, 4vw, 2.5rem)',
+                                            textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+                                            letterSpacing: '-0.02em'
+                                        }}
+                                    >
+                                        Gestión de Clientes
+                                    </h1>
+                                    <p 
+                                        className='mb-0'
+                                        style={{
+                                            fontSize: '1.1rem',
+                                            opacity: 0.9,
+                                            fontWeight: '300'
+                                        }}
+                                    >
+                                        Administra y gestiona tu cartera de clientes
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    <div className='d-flex align-items-center gap-3'>
+                            {/* Botón de registrar cliente */}
+                            <button 
+                                className='btn d-flex align-items-center gap-2' 
+                                onClick={toggleModal}
+                                disabled={loading}
+                                style={{
+                                    background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    color: 'white',
+                                    padding: '10px 16px',
+                                    fontSize: '0.9rem',
+                                    fontWeight: '500',
+                                    boxShadow: '0 4px 16px rgba(40, 167, 69, 0.3)',
+                                    transition: 'all 0.3s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!loading) {
+                                        e.target.style.background = 'linear-gradient(135deg, #218838 0%, #1e7e34 100%)';
+                                        e.target.style.transform = 'translateY(-2px)';
+                                        e.target.style.boxShadow = '0 8px 24px rgba(40, 167, 69, 0.4)';
+                                    }
+                                }}
+                                onMouseLeave={(e) => {
+                                    if (!loading) {
+                                        e.target.style.background = 'linear-gradient(135deg, #28a745 0%, #20c997 100%)';
+                                        e.target.style.transform = 'translateY(0px)';
+                                        e.target.style.boxShadow = '0 4px 16px rgba(40, 167, 69, 0.3)';
+                                    }
+                                }}
+                            >
+                                {loading ? (
+                                    <span className='spinner-border spinner-border-sm'></span>
+                                ) : (
+                                    <i className='bi bi-person-plus'></i>
+                                )}
+                                <span>Nuevo Cliente</span>
+                            </button>
                     </div>
+                    </div>
+                        
                     
-                    <div className='d-flex align-items-center gap-2 gap-md-3'>
-                        {/* Botón de registrar cliente */}
-                        <button 
-                            className='btn d-flex align-items-center gap-1 gap-md-2' 
-                            onClick={toggleModal}
-                            disabled={loading}
-                            style={{
-                                background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                                border: 'none',
-                                borderRadius: '12px',
-                                color: 'white',
-                                padding: '8px 12px',
-                                fontSize: '0.85rem',
-                                fontWeight: '500',
-                                boxShadow: '0 4px 16px rgba(40, 167, 69, 0.3)',
-                                transition: 'all 0.3s ease'
-                            }}
-                            onMouseEnter={(e) => {
-                                if (!loading) {
-                                    e.target.style.transform = 'translateY(-2px)';
-                                    e.target.style.boxShadow = '0 8px 24px rgba(40, 167, 69, 0.4)';
-                                }
-                            }}
-                            onMouseLeave={(e) => {
-                                if (!loading) {
-                                    e.target.style.transform = 'translateY(0px)';
-                                    e.target.style.boxShadow = '0 4px 16px rgba(40, 167, 69, 0.3)';
-                                }
-                            }}
-                        >
-                            {loading ? (
-                                <span className='spinner-border spinner-border-sm'></span>
-                            ) : (
-                                <i className='bi bi-person-plus'></i>
-                            )}
-                            <span className='d-none d-sm-inline'>Registrar </span>
-                            <span>Cliente</span>
-                        </button>
-                    </div>
+                </div>
+
+                {/* Métricas del sistema */}
+                <div className='row g-3 mt-2'>
+                        <div className='col-6 col-md-3'>
+                            <div 
+                                className='p-3 rounded-3'
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    backdropFilter: 'blur(10px)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                                }}
+                            >
+                                <div className='d-flex align-items-center'>
+                                    <i className='bi bi-people me-3' style={{ fontSize: '1.5rem', opacity: 0.9 }}></i>
+                                    <div>
+                                        <div className='fw-bold' style={{ fontSize: '1.4rem' }}>
+                                            {clientes.length}
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                                            Total Clientes
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className='col-6 col-md-3'>
+                            <div 
+                                className='p-3 rounded-3'
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    backdropFilter: 'blur(10px)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                                }}
+                            >
+                                <div className='d-flex align-items-center'>
+                                    <i className='bi bi-check-circle me-3' style={{ fontSize: '1.5rem', opacity: 0.9 }}></i>
+                                    <div>
+                                        <div className='fw-bold' style={{ fontSize: '1.4rem' }}>
+                                            {clientes.filter(c => c.estado).length}
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                                            Activos
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className='col-6 col-md-3'>
+                            <div 
+                                className='p-3 rounded-3'
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    backdropFilter: 'blur(10px)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                                }}
+                            >
+                                <div className='d-flex align-items-center'>
+                                    <i className='bi bi-x-circle me-3' style={{ fontSize: '1.5rem', opacity: 0.9 }}></i>
+                                    <div>
+                                        <div className='fw-bold' style={{ fontSize: '1.4rem' }}>
+                                            {clientes.filter(c => !c.estado).length}
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                                            Inactivos
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className='col-6 col-md-3'>
+                            <div 
+                                className='p-3 rounded-3'
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.15)',
+                                    backdropFilter: 'blur(10px)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)'
+                                }}
+                            >
+                                <div className='d-flex align-items-center'>
+                                    <i className='bi bi-search me-3' style={{ fontSize: '1.5rem', opacity: 0.9 }}></i>
+                                    <div>
+                                        <div className='fw-bold' style={{ fontSize: '1.4rem' }}>
+                                            {totalItems}
+                                        </div>
+                                        <div style={{ fontSize: '0.85rem', opacity: 0.8 }}>
+                                            Filtrados
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                 </div>
             </div>
 
@@ -476,29 +692,69 @@ export default function Clientes() {
                             }}
                         >
                             <div 
-                                className='card-header border-0 p-3 p-md-4'
+                                className='card-header border-0 p-4'
                                 style={{
-                                    background: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)',
-                                    color: 'white'
+                                    background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 50%, #17a2b8 100%)',
+                                    color: 'white',
+                                    borderRadius: '16px 16px 0 0',
+                                    position: 'relative',
+                                    overflow: 'hidden'
                                 }}
                             >
-                                <div className='d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2'>
-                                    <h5 className='mb-0 fw-semibold d-flex align-items-center'>
-                                        <i className='bi bi-list-ul me-2'></i>
-                                        <span className='d-none d-sm-inline'>Lista de </span>Clientes
-                                    </h5>
-                                    <span 
-                                        className='badge'
-                                        style={{
-                                            background: 'rgba(255, 255, 255, 0.2)',
-                                            fontSize: '0.75rem',
-                                            padding: '4px 8px',
-                                            borderRadius: '8px'
-                                        }}
-                                    >
-                                        {totalItems} de {clientes.length}
-                                    </span>
-                                </div>
+                                {/* Efectos decorativos de fondo */}
+                                <div 
+                                    className='position-absolute'
+                                    style={{
+                                        top: '-50%',
+                                        right: '-20%',
+                                        width: '200px',
+                                        height: '200px',
+                                        background: 'rgba(255, 255, 255, 0.1)',
+                                        borderRadius: '50%',
+                                        filter: 'blur(60px)'
+                                    }}
+                                ></div>
+                                
+                                <div className='position-relative'>
+                                    <div className='d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2'>
+                                        <h5 className='mb-0 fw-bold d-flex align-items-center'>
+                                            <div 
+                                                className='me-3 d-flex align-items-center justify-content-center'
+                                                style={{
+                                                    width: '40px',
+                                                    height: '40px',
+                                                    background: 'rgba(255, 255, 255, 0.2)',
+                                                    borderRadius: '12px',
+                                                    backdropFilter: 'blur(10px)',
+                                                    border: '1px solid rgba(255, 255, 255, 0.3)'
+                                                }}
+                                            >
+                                                <i className='bi bi-list-ul' style={{ fontSize: '1.2rem' }}></i>
+                                            </div>
+                                            <div>
+                                                <div style={{ fontSize: '1.3rem', fontWeight: '700' }}>
+                                                    Lista de Clientes
+                                                </div>
+                                                <div style={{ fontSize: '0.85rem', opacity: 0.9, fontWeight: '300' }}>
+                                                    Gestiona tu cartera de clientes
+                                                </div>
+                                            </div>
+                                        </h5>
+                                        <div 
+                                            className='badge d-flex align-items-center gap-2'
+                                            style={{
+                                                background: 'rgba(255, 255, 255, 0.2)',
+                                                fontSize: '0.8rem',
+                                                padding: '8px 12px',
+                                                borderRadius: '10px',
+                                                backdropFilter: 'blur(10px)',
+                                                border: '1px solid rgba(255, 255, 255, 0.3)'
+                                            }}
+                                        >
+                                            <i className='bi bi-people'></i>
+                                            {totalItems} de {clientes.length}
+                                        </div>
+                                    </div>
 
                                 {/* Buscador */}
                                 <div className='mb-3'>
@@ -661,14 +917,16 @@ export default function Clientes() {
                                         </button>
                                     </div>
                                 </div>
+                                </div>
                             </div>
 
                             <div 
                                 className='card-body p-0'
                                 style={{ 
-                                    maxHeight: '60vh', 
+                                    maxHeight: '70vh', 
                                     overflowY: 'auto',
-                                    padding: '0 !important'
+                                    padding: '0 !important',
+                                    minHeight: '400px'
                                 }}
                             >
                                 {clientesPaginados.length === 0 ? (
@@ -709,55 +967,80 @@ export default function Clientes() {
                                                 key={cliente.id} 
                                                 className='list-group-item border-0 p-3'
                                                 style={{
-                                                    borderBottom: '1px solid rgba(0,0,0,0.1) !important',
-                                                    transition: 'all 0.3s ease',
-                                                    background: 'transparent'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                    e.target.style.background = 'rgba(111, 66, 193, 0.05)';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                    e.target.style.background = 'transparent';
+                                                    borderBottom: '1px solid rgba(111, 66, 193, 0.1) !important',
+                                                    background: 'transparent',
+                                                    position: 'relative'
                                                 }}
                                             >
-                                                <div className='d-flex justify-content-between align-items-start'>
+                                                <div className='d-flex justify-content-between align-items-center'>
                                                     <div className='flex-grow-1'>
                                                         <div className='d-flex align-items-center mb-1'>
-                                                            <span 
-                                                                className={`badge me-2`}
+                                                            {/* Avatar con iniciales */}
+                                                            <div 
+                                                                className='me-3 d-flex align-items-center justify-content-center'
                                                                 style={{
+                                                                    width: '40px',
+                                                                    height: '40px',
                                                                     background: cliente.estado 
-                                                                        ? 'linear-gradient(135deg, #28a745 0%, #20c997 100%)'
-                                                                        : 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
-                                                                    fontSize: '0.7rem',
-                                                                    padding: '4px 8px',
-                                                                    borderRadius: '6px'
+                                                                        ? 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)'
+                                                                        : 'linear-gradient(135deg, #6c757d 0%, #495057 100%)',
+                                                                    borderRadius: '10px',
+                                                                    color: 'white',
+                                                                    fontSize: '1rem',
+                                                                    fontWeight: '600',
+                                                                    boxShadow: '0 3px 10px rgba(0, 0, 0, 0.15)'
                                                                 }}
                                                             >
-                                                                <i className={`bi ${cliente.estado ? 'bi-check-circle' : 'bi-x-circle'} me-1`}></i>
-                                                                {cliente.estado ? 'Activo' : 'Inactivo'}
-                                                            </span>
-                                                            <h6 className='mb-0 fw-semibold' style={{ color: '#495057' }}>
-                                                                {cliente.nombre}
-                                                            </h6>
-                                                        </div>
-                                                        <div className='text-muted small'>
-                                                            <div>
-                                                                <i className='bi bi-card-text me-1'></i>
-                                                                Doc: {cliente.documento}
+                                                                {cliente.nombre.charAt(0).toUpperCase()}
                                                             </div>
-                                                            {cliente.telefono && (
-                                                                <div>
-                                                                    <i className='bi bi-telephone me-1'></i>
-                                                                    {cliente.telefono}
+                                                            
+                                                            <div className='flex-grow-1'>
+                                                                <div className='d-flex align-items-center mb-1'>
+                                                                    <h6 className='mb-0 fw-bold me-2' style={{ 
+                                                                        color: '#2d3748',
+                                                                        fontSize: '1rem' 
+                                                                    }}>
+                                                                        {cliente.nombre}
+                                                                    </h6>
+                                                                    <span 
+                                                                        className='badge d-flex align-items-center'
+                                                                        style={{
+                                                                            background: cliente.estado 
+                                                                                ? 'linear-gradient(135deg, rgba(40, 167, 69, 0.2) 0%, rgba(32, 201, 151, 0.2) 100%)'
+                                                                                : 'linear-gradient(135deg, rgba(220, 53, 69, 0.2) 0%, rgba(200, 35, 51, 0.2) 100%)',
+                                                                            color: cliente.estado ? '#155724' : '#721c24',
+                                                                            fontSize: '0.75rem',
+                                                                            padding: '4px 8px',
+                                                                            borderRadius: '8px',
+                                                                            border: `1px solid ${cliente.estado ? 'rgba(40, 167, 69, 0.3)' : 'rgba(220, 53, 69, 0.3)'}`
+                                                                        }}
+                                                                    >
+                                                                        <i className={`bi ${cliente.estado ? 'bi-check-circle-fill' : 'bi-x-circle-fill'} me-1`}></i>
+                                                                        {cliente.estado ? 'Activo' : 'Inactivo'}
+                                                                    </span>
                                                                 </div>
-                                                            )}
+                                                                
+                                                                <div className='d-flex flex-wrap gap-3 text-muted' style={{ fontSize: '0.9rem' }}>
+                                                                    <div className='d-flex align-items-center'>
+                                                                        <i className='bi bi-card-text me-1' style={{ color: '#6f42c1' }}></i>
+                                                                        <span style={{ fontWeight: '500' }}>Doc:</span>
+                                                                        <span className='ms-1'>{cliente.documento}</span>
+                                                                    </div>
+                                                                    {cliente.telefono && (
+                                                                        <div className='d-flex align-items-center'>
+                                                                            <i className='bi bi-telephone me-1' style={{ color: '#17a2b8' }}></i>
+                                                                            <span style={{ fontWeight: '500' }}>Tel:</span>
+                                                                            <span className='ms-1'>{cliente.telefono}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     
-                                                    <div className='d-flex flex-column gap-1'>
+                                                    <div className='d-flex align-items-center gap-2'>
                                                         <button
-                                                            className='btn btn-sm'
+                                                            className='btn btn-sm d-flex align-items-center'
                                                             onClick={() => {
                                                                 iniciarEdicion(cliente);
                                                                 setShowModal(true);
@@ -765,47 +1048,80 @@ export default function Clientes() {
                                                             style={{
                                                                 background: 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)',
                                                                 border: 'none',
-                                                                borderRadius: '6px',
+                                                                borderRadius: '10px',
                                                                 color: 'white',
-                                                                fontSize: '0.75rem',
-                                                                padding: '4px 8px',
-                                                                boxShadow: '0 2px 8px rgba(255, 193, 7, 0.3)'
+                                                                fontSize: '0.8rem',
+                                                                padding: '8px 12px',
+                                                                fontWeight: '500',
+                                                                boxShadow: '0 3px 12px rgba(255, 193, 7, 0.3)',
+                                                                transition: 'all 0.3s ease'
+                                                            }}
+                                                            onMouseEnter={(e) => {
+                                                                e.target.style.transform = 'translateY(-2px)';
+                                                                e.target.style.boxShadow = '0 6px 20px rgba(255, 193, 7, 0.4)';
+                                                            }}
+                                                            onMouseLeave={(e) => {
+                                                                e.target.style.transform = 'translateY(0px)';
+                                                                e.target.style.boxShadow = '0 3px 12px rgba(255, 193, 7, 0.3)';
                                                             }}
                                                         >
-                                                            <i className='bi bi-pencil'></i>
+                                                            <i className='bi bi-pencil me-1'></i>
+                                                            <span className='d-none d-sm-inline'>Editar</span>
                                                         </button>
                                                         
                                                         {cliente.estado ? (
                                                             <button
-                                                                className='btn btn-sm'
+                                                                className='btn btn-sm d-flex align-items-center'
                                                                 onClick={() => eliminarCliente(cliente.id, cliente.nombre)}
                                                                 style={{
                                                                     background: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)',
                                                                     border: 'none',
-                                                                    borderRadius: '6px',
+                                                                    borderRadius: '10px',
                                                                     color: 'white',
-                                                                    fontSize: '0.75rem',
-                                                                    padding: '4px 8px',
-                                                                    boxShadow: '0 2px 8px rgba(220, 53, 69, 0.3)'
+                                                                    fontSize: '0.8rem',
+                                                                    padding: '8px 12px',
+                                                                    fontWeight: '500',
+                                                                    boxShadow: '0 3px 12px rgba(220, 53, 69, 0.3)',
+                                                                    transition: 'all 0.3s ease'
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    e.target.style.transform = 'translateY(-2px)';
+                                                                    e.target.style.boxShadow = '0 6px 20px rgba(220, 53, 69, 0.4)';
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.target.style.transform = 'translateY(0px)';
+                                                                    e.target.style.boxShadow = '0 3px 12px rgba(220, 53, 69, 0.3)';
                                                                 }}
                                                             >
-                                                                <i className='bi bi-trash'></i>
+                                                                <i className='bi bi-trash me-1'></i>
+                                                                <span className='d-none d-sm-inline'>Eliminar</span>
                                                             </button>
                                                         ) : (
                                                             <button
-                                                                className='btn btn-sm'
+                                                                className='btn btn-sm d-flex align-items-center'
                                                                 onClick={() => reactivarCliente(cliente.id, cliente.nombre)}
                                                                 style={{
                                                                     background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
                                                                     border: 'none',
-                                                                    borderRadius: '6px',
+                                                                    borderRadius: '10px',
                                                                     color: 'white',
-                                                                    fontSize: '0.75rem',
-                                                                    padding: '4px 8px',
-                                                                    boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)'
+                                                                    fontSize: '0.8rem',
+                                                                    padding: '8px 12px',
+                                                                    fontWeight: '500',
+                                                                    boxShadow: '0 3px 12px rgba(40, 167, 69, 0.3)',
+                                                                    transition: 'all 0.3s ease'
+                                                                }}
+                                                                onMouseEnter={(e) => {
+                                                                    e.target.style.transform = 'translateY(-2px)';
+                                                                    e.target.style.boxShadow = '0 6px 20px rgba(40, 167, 69, 0.4)';
+                                                                }}
+                                                                onMouseLeave={(e) => {
+                                                                    e.target.style.transform = 'translateY(0px)';
+                                                                    e.target.style.boxShadow = '0 3px 12px rgba(40, 167, 69, 0.3)';
                                                                 }}
                                                             >
-                                                                <i className='bi bi-arrow-clockwise'></i>
+                                                                <i className='bi bi-arrow-clockwise me-1'></i>
+                                                                <span className='d-none d-sm-inline'>Reactivar</span>
                                                             </button>
                                                         )}
                                                     </div>
@@ -1268,16 +1584,17 @@ export default function Clientes() {
                                             style={{ color: '#495057' }}
                                         >
                                             <i className='bi bi-telephone me-2' style={{ color: '#6f42c1' }}></i>
-                                            Teléfono
+                                            Teléfono (9 dígitos)
                                         </label>
                                         <input
-                                            type="tel"
+                                            type="text"
                                             className="form-control"
                                             name="telefono"
                                             value={formData.telefono}
                                             onChange={handleInputChange}
                                             disabled={loading}
-                                            placeholder="Ej: +569 1234 5678"
+                                            placeholder="Ej: 987654321"
+                                            maxLength="9"
                                             style={{
                                                 borderRadius: '10px',
                                                 border: '2px solid #e9ecef',
@@ -1294,6 +1611,10 @@ export default function Clientes() {
                                                 e.target.style.boxShadow = 'none';
                                             }}
                                         />
+                                        <div className="form-text text-muted">
+                                            <i className="bi bi-info-circle me-1"></i>
+                                            Ingrese solo números, máximo 9 dígitos
+                                        </div>
                                     </div>
 
                                     <div className='d-flex gap-3 justify-content-end'>
@@ -1370,6 +1691,175 @@ export default function Clientes() {
                                         </button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Modal de Confirmación Moderno */}
+                {showConfirmModal && (
+                    <div 
+                        className='position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center'
+                        style={{
+                            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                            zIndex: 1060,
+                            backdropFilter: 'blur(6px)'
+                        }}
+                        onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                                cancelConfirmAction();
+                            }
+                        }}
+                    >
+                        <div 
+                            className='card border-0 shadow-lg'
+                            style={{
+                                borderRadius: '20px',
+                                background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
+                                width: '90%',
+                                maxWidth: '480px',
+                                animation: 'modalSlideIn 0.3s ease-out',
+                                overflow: 'hidden'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header del modal con colores según la acción */}
+                            <div 
+                                className='card-header border-0 p-4 text-center'
+                                style={{
+                                    background: confirmAction === 'delete' 
+                                        ? 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'
+                                        : 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                                    color: 'white'
+                                }}
+                            >
+                                <div className='mb-3'>
+                                    <div 
+                                        className='mx-auto d-flex align-items-center justify-content-center'
+                                        style={{
+                                            width: '60px',
+                                            height: '60px',
+                                            background: 'rgba(255, 255, 255, 0.2)',
+                                            borderRadius: '50%',
+                                            backdropFilter: 'blur(10px)'
+                                        }}
+                                    >
+                                        <i 
+                                            className={`bi ${confirmAction === 'delete' ? 'bi-trash' : 'bi-arrow-clockwise'}`}
+                                            style={{ fontSize: '1.8rem' }}
+                                        ></i>
+                                    </div>
+                                </div>
+                                <h5 className='mb-1 fw-bold'>
+                                    {confirmAction === 'delete' ? 'Eliminar Cliente' : 'Reactivar Cliente'}
+                                </h5>
+                                <p className='mb-0 opacity-90'>
+                                    {confirmAction === 'delete' 
+                                        ? 'Esta acción cambiará el estado del cliente a inactivo'
+                                        : 'Esta acción cambiará el estado del cliente a activo'
+                                    }
+                                </p>
+                            </div>
+                            
+                            {/* Cuerpo del modal */}
+                            <div className='card-body p-4 text-center'>
+                                <div className='mb-4'>
+                                    <h6 className='mb-3' style={{ color: '#2d3748', fontWeight: '600' }}>
+                                        {confirmAction === 'delete' 
+                                            ? '¿Estás seguro de que deseas eliminar este cliente?' 
+                                            : '¿Estás seguro de que deseas reactivar este cliente?'
+                                        }
+                                    </h6>
+                                    
+                                    {confirmData && (
+                                        <div 
+                                            className='p-3 rounded-3 d-flex align-items-center'
+                                            style={{
+                                                background: 'linear-gradient(135deg, rgba(111, 66, 193, 0.1) 0%, rgba(23, 162, 184, 0.05) 100%)',
+                                                border: '1px solid rgba(111, 66, 193, 0.2)'
+                                            }}
+                                        >
+                                            <div 
+                                                className='me-3 d-flex align-items-center justify-content-center'
+                                                style={{
+                                                    width: '40px',
+                                                    height: '40px',
+                                                    background: 'linear-gradient(135deg, #6f42c1 0%, #563d7c 100%)',
+                                                    borderRadius: '10px',
+                                                    color: 'white',
+                                                    fontSize: '1rem',
+                                                    fontWeight: '600'
+                                                }}
+                                            >
+                                                {confirmData.nombre.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className='text-start'>
+                                                <div className='fw-bold mb-1' style={{ color: '#2d3748' }}>
+                                                    {confirmData.nombre}
+                                                </div>
+                                                <div className='text-muted small'>
+                                                    Documento: {confirmData.id}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className='d-flex gap-3 justify-content-center'>
+                                    <button 
+                                        type="button" 
+                                        className="btn d-flex align-items-center gap-2"
+                                        onClick={cancelConfirmAction}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #6c757d 0%, #5a6268 100%)',
+                                            border: 'none',
+                                            borderRadius: '12px',
+                                            color: 'white',
+                                            padding: '10px 20px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: '500',
+                                            boxShadow: '0 4px 12px rgba(108, 117, 125, 0.3)',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                    >
+                                        <i className="bi bi-x-circle"></i>
+                                        Cancelar
+                                    </button>
+
+                                    <button 
+                                        type="button" 
+                                        className="btn d-flex align-items-center gap-2"
+                                        onClick={executeConfirmAction}
+                                        disabled={loading}
+                                        style={{
+                                            background: confirmAction === 'delete' 
+                                                ? 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)'
+                                                : 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                                            border: 'none',
+                                            borderRadius: '12px',
+                                            color: 'white',
+                                            padding: '10px 20px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: '500',
+                                            boxShadow: confirmAction === 'delete' 
+                                                ? '0 4px 12px rgba(220, 53, 69, 0.3)'
+                                                : '0 4px 12px rgba(40, 167, 69, 0.3)',
+                                            transition: 'all 0.3s ease'
+                                        }}
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <span className="spinner-border spinner-border-sm"></span>
+                                                {confirmAction === 'delete' ? 'Eliminando...' : 'Reactivando...'}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <i className={`bi ${confirmAction === 'delete' ? 'bi-trash' : 'bi-arrow-clockwise'}`}></i>
+                                                {confirmAction === 'delete' ? 'Sí, Eliminar' : 'Sí, Reactivar'}
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>

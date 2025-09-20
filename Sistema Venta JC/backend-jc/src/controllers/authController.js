@@ -24,6 +24,14 @@ const login = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Credenciales inválidas.' });
     }
 
+    // Verificar si el usuario está activo
+    if (user.estado === false) {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Tu cuenta ha sido desactivada. Contacta al administrador para reactivarla.' 
+      });
+    }
+
     const payload = {
       id: user.id,
       nombre: user.nombre,
